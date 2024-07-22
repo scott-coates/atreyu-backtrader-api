@@ -262,6 +262,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('ignoreSize', False),  # Omit updates that reflect only changes in size, and not price. Applicable to Bid_Ask data requests.
         ('rth_begin', None),    # rth begin time
         ('rth_end', None),      # rth end time
+        ('use_date_split', False),  # split date when date range exceeds max duration
     )
 
     _store = ibstore.IBStore
@@ -616,7 +617,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                         contract=self.contract, enddate=dtend, begindate=dtbegin,
                         timeframe=self._timeframe, compression=self._compression,
                         what=self.p.what, useRTH=self.p.useRTH, tz=self._tz,
-                        sessionend=self.p.sessionend)
+                        sessionend=self.p.sessionend, useSplit=self.p.use_date_split)
                 else:
                     # dtend = num2date(dtend)
                     self._historical_ended = False
@@ -753,7 +754,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     contract=self.contract, enddate=dtend, begindate=dtbegin,
                     timeframe=self._timeframe, compression=self._compression,
                     what=self.p.what, useRTH=self.p.useRTH, tz=self._tz,
-                    sessionend=self.p.sessionend)
+                    sessionend=self.p.sessionend, useSplit=self.p.use_date_split)
 
             self._state = self._ST_HISTORBACK
             return True  # continue before

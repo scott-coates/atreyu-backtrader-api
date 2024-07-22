@@ -1333,7 +1333,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
     def reqHistoricalDataEx(self, contract, enddate, begindate,
                             timeframe, compression,
                             what=None, useRTH=False, tz='', sessionend=None,
-                            tickerId=None):
+                            tickerId=None, useSplit=False):
         '''
         Extension of the raw reqHistoricalData proxy, which takes two dates
         rather than a duration, barsize and date
@@ -1370,8 +1370,26 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         if begindate is None:
             duration = self.get_max_duration(barsize)
         else:
-            # Get the best possible duration to reduce number of requests
-            begindate, duration = self.dt_plus_duration(begindate, enddate, base_duration)
+            if useSplit:
+                begindate, splitend, duration, finished = self.dt_split_duration(begindate, enddate, base_duration)
+                if not finished:
+                    with self._lock_histdata:
+                        self.histexreq[tickerId] = {
+                            'contract': contract,
+                            'enddate': enddate,
+                            'begindate': splitend,
+                            'timeframe': timeframe,
+                            'compression': compression,
+                            'what': what,
+                            'useRTH': useRTH,
+                            'tz': tz,
+                            'sessionend': sessionend,
+                            'useSplit': useSplit,
+                        }
+                enddate = splitend
+            else:
+                # Get the best possible duration to reduce number of requests
+                begindate, duration = self.dt_plus_duration(begindate, enddate, base_duration)
 
         duration = self.check_max_duration(barsize, duration)
 
@@ -1888,7 +1906,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         elif dim == 'D':
             value = math.ceil(seconds/ 86400 / base_size) * base_size
             if value > IBStore.MAX_DURATION['D']:
-                return dtend - datetime.timedelta(days=IBStore.MAX_DURATION['D']), "1 Y"
+                value = value / IBStore.MAX_DURATION['D']
+                return dtend - datetime.timedelta(days=IBStore.MAX_DURATION['D']), f"{value} Y"
             else:
                 return dtend - datetime.timedelta(days=value), f"{value} D"
         elif dim == 'W':
@@ -1902,6 +1921,18 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             return dtend - datetime.timedelta(days=(value * 365)), f"{value} Y"
         else:
             return None, None
+
+    def dt_split_duration(self, dtbegin, dtend, base_duration):
+        if base_duration != "1 D":
+            raise RuntimeError("split duration only support 1 D")
+
+        # max duration
+        delta_days = math.ceil((dtend - dtbegin).total_seconds() / 86400)
+        if delta_days > IBStore.MAX_DURATION['D']:
+            split_end = dtbegin + datetime.timedelta(days=IBStore.MAX_DURATION['D'])
+            return dtbegin, split_end, f"{IBStore.MAX_DURATION['D']} D", False
+        else:
+            return dtbegin, dtend, f"{delta_days} D", True
 
     def makecontract(self, symbol, sectype, exch, curr,
                      expiry='', strike=0.0, right='', mult=1, 
