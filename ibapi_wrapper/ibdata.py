@@ -673,6 +673,11 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                         self._state = self._ST_LIVE
                         continue
 
+                elif msg == "WaitSplit":
+                    self._historical_get_data = False
+                    self._historical_get_date_time = None
+                    continue
+
                 elif msg == -354:  # Data not subscribed
                     self._subcription_valid = False
                     self.put_notification(self.NOTSUBSCRIBED)

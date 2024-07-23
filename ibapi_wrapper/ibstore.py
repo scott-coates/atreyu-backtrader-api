@@ -1785,7 +1785,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             self.histtz.pop(tickerId, None)
             kargs = self.histexreq.pop(tickerId, None)
         if kargs is not None:
-            self.reqHistoricalDataEx(tickerId=tickerId, **kargs)
+            q = self.reqHistoricalDataEx(tickerId=tickerId, **kargs)
+            q.put("WaitSplit")
             return
 
         with self._lock_q:
