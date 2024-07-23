@@ -262,6 +262,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('ignoreSize', False),  # Omit updates that reflect only changes in size, and not price. Applicable to Bid_Ask data requests.
         ('rth_begin', None),    # rth begin time
         ('rth_end', None),      # rth end time
+        ('rth_duration', None),     # session last time
         ('use_date_split', False),  # split date when date range exceeds max duration
     )
 
