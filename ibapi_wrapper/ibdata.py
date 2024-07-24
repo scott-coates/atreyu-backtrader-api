@@ -264,6 +264,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('rth_end', None),      # rth end time
         ('rth_duration', None),     # session last time
         ('use_date_split', False),  # split date when date range exceeds max duration
+        ('ignore_incomplete', False),  # ignore incomplete data
     )
 
     _store = ibstore.IBStore
@@ -786,6 +787,18 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         dt = date2num(rtbar.time if not hist else rtbar.date)
         if dt < self.lines.datetime[-1] and not self.p.latethrough:
             return False  # cannot deliver earlier than already delivered
+
+        # ignore incomplete data, for example now is 2024-07-24 13:00:00
+        # but the data is 2024-07-24 16:00:00 for the daily data
+        # if set ignore_incomplete to True, the data will be ignored
+        if self.p.ignore_incomplete:
+            if self._timeoffset:
+                now = datetime.datetime.now(self._gettz()) + self._timeoffset()
+            else:
+                now = datetime.datetime.now(self._gettz())
+
+            if now + datetime.timedelta(seconds=30) < rtbar.date:
+                return False
 
         self.lines.datetime[0] = dt
         # Put the tick into the bar
