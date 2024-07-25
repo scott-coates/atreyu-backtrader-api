@@ -977,3 +977,10 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
 
     def rebuild_after_reconnect(self):
         self.request_broker_orders()
+
+    def get_symbol_orders(self, symbol):
+        order_list = []
+        for order in self.orderbyid.values():
+            if order.contract.symbol == symbol:
+                order_list.append(order.contract.symbol)
+        return order_list
