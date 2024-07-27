@@ -260,8 +260,6 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('tradename', None),  # use a different asset as order target
         ('numberOfTicks', 1000),  # Number of distinct data points. Max is 1000 per request.
         ('ignoreSize', False),  # Omit updates that reflect only changes in size, and not price. Applicable to Bid_Ask data requests.
-        ('rth_begin', None),    # rth begin time
-        ('rth_end', None),      # rth end time
         ('rth_duration', None),     # session last time
         ('use_date_split', False),  # split date when date range exceeds max duration
         ('ignore_incomplete', False),  # ignore incomplete data
@@ -322,18 +320,11 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.pretradecontract = self.parsecontract(self.p.tradename)
         self.qerror = queue.Queue()
         self.init_logger()
-        self.init_rth_time()
+        self.init_trade_hours_data()
 
-    def init_rth_time(self):
-        if self.p.rth_begin is not None:
-            self.rth_begin = datetime.datetime.strptime(self.p.rth_begin, '%H:%M:%S').time()
-        else:
-            self.rth_begin = None
-
-        if self.p.rth_end is not None:
-            self.rth_end = datetime.datetime.strptime(self.p.rth_end, '%H:%M:%S').time()
-        else:
-            self.rth_end = None
+    def init_trade_hours_data(self):
+        self._liquid_hours = {}
+        self._trade_ours = {}
 
     def init_logger(self):
         self.logger = logging.getLogger(__name__)
@@ -443,6 +434,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.contractdetails = None
         self.tradecontract = None
         self.tradecontractdetails = None
+        self.init_trade_hours_data()
 
         if self.p.backfill_from is not None:
             self._state = self._ST_FROM
@@ -467,6 +459,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             cdetails = cds[0]
             self.contract = cdetails.contract
             self.contractdetails = cdetails
+            self.init_trade_hours_data()
         else:
             # no contract can be found (or many)
             self.put_notification(self.DISCONNECTED)
@@ -870,3 +863,55 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
     def push_error(self, msg):
         self.qerror.put(msg)
+
+    def _parse_trading_hours(self, hours_str):
+        sessions = {}
+        for part in hours_str.split(";"):
+            if "-" in part:
+                # 20240729:0930-20240729:1600
+                start, end = part.split("-")
+                date, start_time = start.split(":")
+                _, end_time = end.split(":")
+                start_dt = self._tz.localize(datetime.datetime.strptime(f"{date} {start_time}", "%Y%m%d %H%M"))
+                end_dt = self._tz.localize(datetime.datetime.strptime(f"{date} {end_time}", "%Y%m%d %H%M"))
+                sessions[date] = {"start":start_dt, "end":end_dt}
+            elif ":" in part:
+                date, rest = part.split(":")
+                if rest.lower() == "closed":
+                    sessions[date] = {"start": None, "end": None}
+                else:
+                    raise RuntimeError(f"Cannot parse trading hours: {hours_str} that is not closed")
+            else:
+                raise RuntimeError(f"Cannot parse trading hours: {hours_str}")
+        return sessions
+
+    def get_liquid_hours(self):
+        """Definition: Liquid hours represent the time period when there is typically higher trading volume and liquidity for the contract. This means that there are usually more buyers and sellers active in the market during these hours, leading to tighter bid-ask spreads and potentially more efficient price execution.
+Usage: These hours are often considered the primary trading period for the instrument and are usually the most relevant for active traders or those seeking to execute larger orders.
+Example: For a US stock, liquid hours might be 9:30 AM to 4:00 PM ET, which is the regular trading session for most US equities.
+"""
+        if len(self._liquid_hours) > 0:
+            return self._liquid_hours
+
+        if self.contractdetails is None:
+            return self._liquid_hours
+
+        liquid_hours = self.contractdetails.liquidHours
+        # example value: '20240727:CLOSED;20240728:CLOSED;20240729:0930-20240729:1600;20240730:0930-20240730:1600;20240731:0930-20240731:1600;20240801:0930-20240801:1600'
+        self._liquid_hours = self._parse_trading_hours(liquid_hours)
+        return self._liquid_hours
+
+    def get_trade_hours(self):
+        """Definition: Trading hours represent the overall period when the contract is available for trading. This can include the liquid hours as well as any extended or pre-market/post-market sessions where trading is allowed but may be less active.
+Usage: These hours provide a broader view of when the contract is tradeable and are useful for understanding the full range of trading opportunities, especially for those interested in extended or off-hours trading.
+Example: For a US stock, trading hours might be 4:00 AM to 8:00 PM ET, encompassing the pre-market, regular session, and after-hours trading.
+        """
+        if len(self._trade_ours) > 0:
+            return self._trade_ours
+
+        if self.contractdetails is None:
+            return self._trade_ours
+
+        trade_hours = self.contractdetails.tradingHours
+        self._trade_ours = self._parse_trading_hours(trade_hours)
+        return self._trade_ours
