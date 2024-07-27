@@ -982,5 +982,5 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         order_list = []
         for order in self.orderbyid.values():
             if order.contract.symbol == symbol:
-                order_list.append(order.contract.symbol)
+                order_list.append(order)
         return order_list
