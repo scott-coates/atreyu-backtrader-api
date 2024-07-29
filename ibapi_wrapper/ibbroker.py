@@ -902,11 +902,38 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
 
         self.check_completed_orders(save_data)
 
+    def check_expired_orders(self, order_data):
+        tif = order_data.get("tif", None)
+        if tif == "GTD":
+            date_string = order_data.get("good_till_date", None)
+            tz_string = date_string.split(" ")[-1]
+            date_string = date_string[0:date_string.rfind(" ")]
+            end_dt = datetime.datetime.strptime(date_string, "%Y%m%d %H:%M:%S")
+            now_dt = datetime.datetime.now(pytz.timezone(tz_string))
+            end_dt = pytz.timezone(tz_string).localize(end_dt)
+            if end_dt >= now_dt:
+                return False
+        else:
+            return False
+
+        src_filename = f"{order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}.json"
+        index = 1
+        while True:
+            filename = f"{order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}_{index}.json"
+            if not os.path.exists(os.path.join(self.save_expire_path, filename)):
+                break
+            else:
+                index += 1
+        dest_path = os.path.abspath(os.path.join(self.save_expire_path, filename))
+        # move
+        os.rename(os.path.join(self.save_path, src_filename), dest_path)
+        self.logger.info(f"Order({order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}) move to Expired directory.")
+        return True
+
     def check_completed_orders(self, order_data):
         if order_data["ibstatus"] not in (self.FILLED, self.CANCELLED, self.INACTIVE, self.APICANCELLED):
             return
 
-        # TODO: find the unique id from ibapi for the order file
         src_filename = f"{order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}.json"
         index = 1
         while True:
@@ -946,6 +973,9 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 # move the file to another directory
                 self.check_completed_orders(order_data)
                 continue
+            else:
+                if self.check_expired_orders(order_data):
+                    continue
             ib_order = self.rebuild_order(order_data)
             if ib_order is None:
                 continue
