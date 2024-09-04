@@ -671,6 +671,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 elif msg == "WaitSplit":
                     self._historical_get_data = False
                     self._historical_get_date_time = None
+                    self.logger.info(f"Receive WaitSplit Msg, qcheck is {self._qcheck}")
                     continue
 
                 elif msg == -354:  # Data not subscribed
