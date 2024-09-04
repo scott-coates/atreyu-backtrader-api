@@ -531,6 +531,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
     def haslivedata(self):
         return bool(self._storedmsg or self.qlive)
 
+    def do_qcheck(self, onoff, qlapse):
+        # if onoff is True the data will wait p.qcheck for incoming live data
+        # on its queue.
+        qwait = self.p.qcheck
+        qwait = max(0.0, qwait - qlapse)
+        self._qcheck = qwait
+
     def _load(self):
         self._process_errors()
 
