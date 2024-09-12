@@ -693,8 +693,12 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 else:
                     index += 1
             dest_path = os.path.abspath(os.path.join(self.save_expire_path, dest_name))
-            os.rename(os.path.join(self.save_path, filename), os.path.join(self.save_expire_path, dest_path))
-            self.logger.info(f"Move the expired order {filename} to expire folder")
+            src_path = os.path.join(self.save_path, filename)
+            if not os.path.exists(src_path):
+                self.logger.info(f"Cannot find the order file {src_path} for moving to expire folder {dest_path}")
+            else:
+                os.rename(src_path, os.path.join(self.save_expire_path, dest_path))
+                self.logger.info(f"Move the expired order {filename} to expire folder")
             if orderid in self.orderbyid:
                 self.orderbyid.pop(orderid)
             self.loaded_orders.pop(orderid)
@@ -943,9 +947,13 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             else:
                 index += 1
         dest_path = os.path.abspath(os.path.join(self.save_completed_path, filename))
+        src_file = os.path.join(self.save_path, src_filename)
         # move
-        os.rename(os.path.join(self.save_path, src_filename), dest_path)
-        self.logger.info(f"Order({order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}) move to Completed directory.")
+        if os.path.exists(src_file):
+            os.rename(src_file, dest_path)
+            self.logger.info(f"Order({order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}) move to Completed directory.")
+        else:
+            self.logger.info(f"Order({order_data['symbol']}_{order_data['client_id']}_{order_data['order_id']}) Cannot move to Completed directory.")
 
     def load_orders(self):
         '''
