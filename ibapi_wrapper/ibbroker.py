@@ -518,9 +518,9 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
 
     # Order statuses in msg
     (SUBMITTED, FILLED, CANCELLED, INACTIVE,
-     PENDINGSUBMIT, PENDINGCANCEL, PRESUBMITTED, APICANCELLED) = (
+     PENDINGSUBMIT, PENDINGCANCEL, PRESUBMITTED, APICANCELLED, APIPENDING) = (
         'Submitted', 'Filled', 'Cancelled', 'Inactive',
-         'PendingSubmit', 'PendingCancel', 'PreSubmitted', "ApiCancelled")
+         'PendingSubmit', 'PendingCancel', 'PreSubmitted', "ApiCancelled", "ApiPending")
 
     def push_orderstatus(self, msg):
         # Cancelled and Submitted with Filled = 0 can be pushed immediately
@@ -579,7 +579,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             # commission are all in place - commission is the last to come
             self.ordstatus[msg.orderId][msg.filled] = msg
 
-        elif msg.status in [self.PENDINGSUBMIT, self.PRESUBMITTED]:
+        elif msg.status in [self.PENDINGSUBMIT, self.PRESUBMITTED, self.APIPENDING]:
             # According to the docs, these statuses can only be set by the
             # programmer but the demo account sent it back at random times with
             # "filled"
