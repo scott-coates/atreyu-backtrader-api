@@ -681,6 +681,14 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self.logger.info(f"Receive WaitSplit Msg, qcheck is {self._qcheck}")
                     continue
 
+                elif msg in [162, 320, 321, 322]:
+                    # fetch the data again
+                    self._st_start()
+                    self._historical_get_data = False
+                    self._historical_get_date_time = None
+                    self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}") 
+                    continue
+
                 elif msg == -354:  # Data not subscribed
                     self._subcription_valid = False
                     self.put_notification(self.NOTSUBSCRIBED)

@@ -1117,7 +1117,17 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             # Usually received as an error in connection of just before disconn
             pass
 
-        elif msg.errorCode in [200, 203, 162, 320, 321, 322]:
+        elif msg.errorCode in [162, 320, 321, 322]:
+            # try to fetch the data again and again
+            try:
+                with self._lock_q:
+                    q = self.qs[msg.reqId]
+            except KeyError:
+                store_logger.warn(f"Cancel data queue for {msg.reqId} failed. Cannot find the queue")
+            else:
+                q.put(msg.errorCode)
+
+        elif msg.errorCode in [200, 203]:
             # cdetails 200 security not found, notify over right queue
             # cdetails 203 security not allowed for acct
             try:
