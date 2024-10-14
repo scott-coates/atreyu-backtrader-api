@@ -613,6 +613,9 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     dtbegin = None
 
                 dtend = msg.datetime if self._usertvol else msg.time
+                self.p.todate = dtend
+                if dtend.tzinfo is not None:
+                    dtend = dtend.astimezone(pytz.utc)
 
                 if self._timeframe != bt.TimeFrame.Ticks:
                     self._historical_ended = False
