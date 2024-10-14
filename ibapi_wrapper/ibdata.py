@@ -30,6 +30,7 @@ from backtrader.metabase import MetaParams
 from ibapi_wrapper import ibstore
 import datetime
 import pytz
+import time
 
 import logging
 
@@ -263,6 +264,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('rth_duration', None),     # session last time
         ('use_date_split', False),  # split date when date range exceeds max duration
         ('ignore_incomplete', False),  # ignore incomplete data
+        ('ignore_fetcherror', False),  # ignore fetch error
     )
 
     _store = ibstore.IBStore
@@ -682,12 +684,31 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     continue
 
                 elif msg in [162, 320, 321, 322]:
-                    # fetch the data again
-                    self._st_start()
-                    self._historical_get_data = False
-                    self._historical_get_date_time = None
-                    self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}") 
-                    continue
+                    if not self.p.ignore_fetcherror:
+                        # fetch the data again, only when the timeframe in [seconds, minutes]
+                        if self._timeframe in [bt.TimeFrame.Seconds, bt.TimeFrame.Minutes]:
+                            # sleep one minute and move the end data
+                            self.p.todate += datetime.timedelta(minutes=1)
+                            self.todate = self.date2num(self.p.todate)
+                            self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate}") 
+                            time.sleep(60)
+                            self._st_start()
+                            self._historical_get_data = False
+                            self._historical_get_date_time = None
+                            continue
+
+                    self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
+                    # stop data
+                    self._subcription_valid = False
+                    self._historical_ended = True
+                    # check the live mode
+                    if self.p.historical:
+                        self.put_notification(self.DISCONNECTED)
+                        return False
+                    else:
+                        # return back to Live mode
+                        self._state = self._ST_LIVE
+                        continue
 
                 elif msg == -354:  # Data not subscribed
                     self._subcription_valid = False
