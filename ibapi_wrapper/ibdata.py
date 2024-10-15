@@ -556,6 +556,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # sleep one minute and move the end data
             self.p.todate += datetime.timedelta(minutes=1)
             sleep = 60
+            if self.p.todate.tzinfo is None:
+                self.p.todate = self._gettz().localize(self.p.todate)
             if self.p.todate > compitable_tz:
                 self.p.todate = compitable_tz
         else:
