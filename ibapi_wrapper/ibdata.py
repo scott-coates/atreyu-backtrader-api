@@ -31,6 +31,7 @@ from ibapi_wrapper import ibstore
 import datetime
 import pytz
 import time
+import tzlocal
 
 import logging
 
@@ -323,6 +324,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.qerror = queue.Queue()
         self.init_logger()
         self.init_trade_hours_data()
+        self._retry_fetch_method = None
 
     def init_trade_hours_data(self):
         self._liquid_hours = {}
@@ -540,6 +542,35 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         qwait = max(0.0, qwait - qlapse)
         self._qcheck = qwait
 
+    def _fix_fetch_todate(self):
+        local_timezone = tzlocal.get_localzone_name()
+        local_dt = pytz.timezone(local_timezone).localize(datetime.datetime.now())
+
+        if self._timeframe in [bt.TimeFrame.Seconds, bt.TimeFrame.Minutes]:
+            compitable_tz = local_dt + datetime.timedelta(minutes=1)
+            # sleep one minute and move the end data
+            self.p.todate += datetime.timedelta(minutes=1)
+            if self.p.todata > compitable_tz:
+                self.p.todate = compitable_tz
+        else:
+            if self._retry_fetch_method is None:
+                if self.p.todate.date() >= local_dt.date():
+                    self._retry_fetch_method = 'sub'
+                else:
+                    self._retry_fetch_method = 'add'
+
+            if self._retry_fetch_method == 'sub':
+                self.p.todate = self.p.todate - datetime.timedelta(days=1)
+                if self.p.todate < local_dt - datetime.timedelta(days=29):
+                    self._retry_fetch_method = None
+            else:
+                self.p.todate = self.p.todate + datetime.timedelta(days=1)
+                if self.p.todate > local_dt + datetime.timedelta(days=1):
+                    self._retry_fetch_method = None
+
+        # set the request time
+        self.todate = self.date2num(self.p.todate)
+
     def _load(self):
         self._process_errors()
 
@@ -688,17 +719,14 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
                 elif msg in [162, 320, 321, 322]:
                     if not self.p.ignore_fetcherror:
-                        # fetch the data again, only when the timeframe in [seconds, minutes]
-                        if self._timeframe in [bt.TimeFrame.Seconds, bt.TimeFrame.Minutes]:
-                            # sleep one minute and move the end data
-                            self.p.todate += datetime.timedelta(minutes=1)
-                            self.todate = self.date2num(self.p.todate)
-                            self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate}") 
-                            time.sleep(60)
-                            self._st_start()
-                            self._historical_get_data = False
-                            self._historical_get_date_time = None
-                            continue
+                        # fetch the data again
+                        self._fix_fetch_todate()
+                        self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method}") 
+                        time.sleep(60)
+                        self._st_start()
+                        self._historical_get_data = False
+                        self._historical_get_date_time = None
+                        continue
 
                     self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
                     # stop data
@@ -736,6 +764,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                         if self._load_rtticks(msg, hist=True):
                             return True
                     else:
+                        if self._timeframe == bt.TimeFrame.Seconds:
+                            print(f"Load historical data: {msg.date} {msg.close} 0000000000000000000000000000000000")
                         if self._load_rtbar(msg, hist=True):
                             return True  # loading worked
 
