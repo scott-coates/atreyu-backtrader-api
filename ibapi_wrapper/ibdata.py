@@ -545,11 +545,17 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
     def _fix_fetch_todate(self):
         local_timezone = tzlocal.get_localzone_name()
         local_dt = pytz.timezone(local_timezone).localize(datetime.datetime.now())
+        sleep = 0
 
         if self._timeframe in [bt.TimeFrame.Seconds, bt.TimeFrame.Minutes]:
             compitable_tz = local_dt + datetime.timedelta(minutes=1)
+            # we cannot substract the time like day data
+            # because the minutes data is huge data, we cannot gurantee that the market is closed when substract the time
+            # if that, we will lose market data
+            # so when there is a minute or second data error, just wait the market open
             # sleep one minute and move the end data
             self.p.todate += datetime.timedelta(minutes=1)
+            sleep = 60
             if self.p.todata > compitable_tz:
                 self.p.todate = compitable_tz
         else:
@@ -570,6 +576,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
         # set the request time
         self.todate = self.date2num(self.p.todate)
+        return sleep
 
     def _load(self):
         self._process_errors()
@@ -720,9 +727,9 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 elif msg in [162, 320, 321, 322]:
                     if not self.p.ignore_fetcherror:
                         # fetch the data again
-                        self._fix_fetch_todate()
-                        self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method}") 
-                        time.sleep(60)
+                        sleep_time = self._fix_fetch_todate()
+                        self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
+                        time.sleep(sleep_time)
                         self._st_start()
                         self._historical_get_data = False
                         self._historical_get_date_time = None
@@ -764,8 +771,6 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                         if self._load_rtticks(msg, hist=True):
                             return True
                     else:
-                        if self._timeframe == bt.TimeFrame.Seconds:
-                            print(f"Load historical data: {msg.date} {msg.close} 0000000000000000000000000000000000")
                         if self._load_rtbar(msg, hist=True):
                             return True  # loading worked
 
