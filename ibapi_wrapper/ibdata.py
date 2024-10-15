@@ -556,7 +556,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # sleep one minute and move the end data
             self.p.todate += datetime.timedelta(minutes=1)
             sleep = 60
-            if self.p.todata > compitable_tz:
+            if self.p.todate > compitable_tz:
                 self.p.todate = compitable_tz
         else:
             if self._retry_fetch_method is None:
