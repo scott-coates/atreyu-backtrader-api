@@ -617,7 +617,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self.put_notification(self.LIVE)
 
             if self._usertvol and self._timeframe != bt.TimeFrame.Ticks:
-                ret = self._load_rtvolume(msg)
+                ret = self._load_rtdata(msg)
             elif self._usertvol and self._timeframe == bt.TimeFrame.Ticks:
                 ret = self._load_rtticks(msg)
             else:
@@ -895,25 +895,53 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
         return True
 
-    def _load_rtvolume(self, rtvol):
-        # A single tick is delivered and is therefore used for the entire set
-        # of prices. Ideally the
-        # contains open/high/low/close/volume prices
-        # Datetime transformation
-        dt = date2num(rtvol.datetime)
+    def _load_rtdata(self, rtdata):
+        if rtdata.is_valid is False:
+            return False
+
+        dt = date2num(rtdata.datetime)
         if dt < self.lines.datetime[-1] and not self.p.latethrough:
             return False  # cannot deliver earlier than already delivered
 
         self.lines.datetime[0] = dt
 
-        # Put the tick into the bar
-        tick = rtvol.price if rtvol.price else self.lines.close[-1]
-        self.lines.open[0] = tick
-        self.lines.high[0] = tick
-        self.lines.low[0] = tick
-        self.lines.close[0] = tick
-        self.lines.volume[0] = rtvol.size if rtvol.size else self.lines.volume[-1]
-        self.lines.openinterest[0] = 0
+        # get the data type, only use the high, low, close, volume now
+        if rtdata.field == 'LAST_PRICE':
+            self.lines.close[0] = rtdata.value
+
+            self.lines.open[0] = None
+            self.lines.high[0] = None
+            self.lines.low[0] = None
+            self.lines.volume[0] = None
+            self.lines.openinterest[0] = None
+        elif rtdata.field == 'HIGH':
+            self.lines.high[0] = rtdata.value
+
+            self.lines.close[0] = None
+            self.lines.open[0] = None
+            self.lines.low[0] = None
+            self.lines.volume[0] = None
+            self.lines.openinterest[0] = None
+        elif rtdata.field == 'LOW':
+            self.lines.low[0] = rtdata.value
+
+            self.lines.close[0] = None
+            self.lines.open[0] = None
+            self.lines.high[0] = None
+            self.lines.volume[0] = None
+            self.lines.openinterest[0] = None
+
+        elif rtdata.field == 'VOLUME':
+            self.lines.volume[0] = rtdata.size
+
+            self.lines.close[0] = None
+            self.lines.open[0] = None
+            self.lines.high[0] = None
+            self.lines.low[0] = None
+            self.lines.openinterest[0] = None
+
+        else:
+            return False
 
         return True
 
