@@ -36,6 +36,9 @@ import tzlocal
 import logging
 
 
+CONTINUE = 0x11111111
+
+
 class MetaIBData(DataBase.__class__):
     def __init__(cls, name, bases, dct):
         '''Class has already been created ... register'''
@@ -580,6 +583,222 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.todate = self.date2num(self.p.todate)
         return sleep
 
+    def _load_live_data(self):
+        try:
+            msg = (self._storedmsg.pop(None, None) or
+                    self.qlive.get(timeout=self._qcheck))
+        except queue.Empty:
+            return None
+
+        if msg is None:  # Conn broken during historical/backfilling
+            self._subcription_valid = False
+            self.put_notification(self.CONNBROKEN)
+            self.ib.set_losing_data(True)
+            self._statelivereconn = self.p.backfill
+            return CONTINUE
+
+        if msg == -354:
+            self.ib.set_losing_data(True)
+            self.put_notification(self.NOTSUBSCRIBED)
+            return False
+
+        elif isinstance(msg, integer_types):
+            # Unexpected notification for historical data skip it
+            # May be a "not connected not yet processed"
+            self.put_notification(self.UNKNOWN, msg)
+            return CONTINUE
+
+        self.ib.set_losing_data(False)
+
+        # Process the message according to expected return type
+        if not self._statelivereconn:
+            if self._laststatus != self.LIVE:
+                if self.qlive.qsize() <= 1:  # very short live queue
+                    self.put_notification(self.LIVE)
+
+            if self._usertvol and self._timeframe != bt.TimeFrame.Ticks:
+                ret = self._load_rtvolume(msg)
+            elif self._usertvol and self._timeframe == bt.TimeFrame.Ticks:
+                ret = self._load_rtticks(msg)
+            else:
+                ret = self._load_rtbar(msg)
+            if ret:
+                return True
+
+            # could not load bar ... go and get new one
+            return CONTINUE
+
+        # Fall through to processing reconnect - try to backfill
+        self._storedmsg[None] = msg  # keep the msg
+
+        # else do a backfill
+        if self._laststatus != self.DELAYED:
+            self.put_notification(self.DELAYED)
+
+        dtend = None
+        if len(self) > 1:
+            # len == 1 ... forwarded for the 1st time
+            # get begin date in utc-like format like msg.datetime
+            dtbegin = num2date(self.datetime[-1])
+            dtbegin = pytz.utc.localize(dtbegin)
+        elif self.fromdate > float('-inf'):
+            dtbegin = num2date(self.fromdate)
+            dtbegin = pytz.utc.localize(dtbegin)
+        else:  # 1st bar and no begin set
+            # passing None to fetch max possible in 1 request
+            dtbegin = None
+
+        dtend = msg.datetime if self._usertvol else msg.time
+        self.p.todate = dtend
+        if dtend.tzinfo is not None:
+            dtend = dtend.astimezone(pytz.utc)
+
+        if self._timeframe != bt.TimeFrame.Ticks:
+            self._historical_ended = False
+            self._historical_get_data = False
+            self.qhist = self.ib.reqHistoricalDataEx(
+                contract=self.contract, enddate=dtend, begindate=dtbegin,
+                timeframe=self._timeframe, compression=self._compression,
+                what=self.p.what, useRTH=self.p.useRTH, tz=self._tz,
+                sessionend=self.p.sessionend, useSplit=self.p.use_date_split)
+        else:
+            # dtend = num2date(dtend)
+            self._historical_ended = False
+            self._historical_get_data = False
+            self.qhist = self.ib.reqHistoricalTicksEx(
+                contract=self.contract, enddate=dtend,
+                what=self.p.what, useRTH=self.p.useRTH, tz=self._tz,
+                )
+
+        self._state = self._ST_HISTORBACK
+        self._statelivereconn = False  # no longer in live
+        return CONTINUE
+
+    def _load_histrial_data(self):
+        if self._historical_ended:
+            return False
+
+        try:
+            # There is no historical data sometimes, especially when start the data during the closed market
+            if not self._historical_get_data:
+                msg = self.qhist.get(timeout=self._qcheck)
+            else:
+                msg = self.qhist.get()
+        except queue.Empty:
+            if self.p.historical:  # only historical
+                if self._historical_get_date_time is None:
+                    self.logger.warning("We didn't get historical data, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
+                    self._historical_get_date_time = datetime.datetime.now()
+
+                if datetime.datetime.now() - self._historical_get_date_time > datetime.timedelta(seconds=60):
+                    self.logger.warning("We didn't get historical data for 60 seconds, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
+                    self._historical_get_date_time = datetime.datetime.now()
+                # self.put_notification(self.DISCONNECTED)
+                return None  # end of historical
+
+            # Live is also wished - go for it
+            self._state = self._ST_LIVE
+            return CONTINUE
+
+        self._historical_get_data = True
+        self._historical_get_date_time = datetime.datetime.now()
+
+        if msg is None:  # Conn broken during historical/backfilling
+            # Situation not managed. Simply bail out
+            self._subcription_valid = False
+            self._historical_ended = True
+            # check the live mode
+            if self.p.historical:
+                self.put_notification(self.DISCONNECTED)
+                return False
+            else:
+                # return back to Live mode
+                self._state = self._ST_LIVE
+                return CONTINUE
+
+        elif msg == "WaitSplit":
+            self._historical_get_data = False
+            self._historical_get_date_time = None
+            self.logger.info(f"Receive WaitSplit Msg, qcheck is {self._qcheck}")
+            return CONTINUE
+
+        elif msg in [162, 320, 321, 322]:
+            if not self.p.ignore_fetcherror:
+                # fetch the data again
+                sleep_time = self._fix_fetch_todate()
+                self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
+                time.sleep(sleep_time)
+                self._st_start()
+                self._historical_get_data = False
+                self._historical_get_date_time = None
+                return CONTINUE
+
+            self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
+            # stop data
+            self._subcription_valid = False
+            self._historical_ended = True
+            # check the live mode
+            if self.p.historical:
+                self.put_notification(self.DISCONNECTED)
+                return False
+            else:
+                # return back to Live mode
+                self._state = self._ST_LIVE
+                return CONTINUE
+
+        elif msg == -354:  # Data not subscribed
+            self._subcription_valid = False
+            self.put_notification(self.NOTSUBSCRIBED)
+            return False
+
+        elif msg == -420:  # No permissions for the data
+            self._subcription_valid = False
+            self.put_notification(self.NOTSUBSCRIBED)
+            return False
+
+        elif isinstance(msg, integer_types):
+            # Unexpected notification for historical data skip it
+            # May be a "not connected not yet processed"
+            self.put_notification(self.UNKNOWN, msg)
+            return CONTINUE
+
+        self.ib.set_losing_data(False)
+
+        if msg.date is not None:
+            if self._timeframe == bt.TimeFrame.Ticks:
+                if self._load_rtticks(msg, hist=True):
+                    return True
+            else:
+                if self._load_rtbar(msg, hist=True):
+                    return True  # loading worked
+
+            # the date is from overlapping historical request
+            return CONTINUE
+
+        # End of histdata
+        if self.p.historical:  # only historical
+            self.put_notification(self.DISCONNECTED)
+            return False  # end of historical
+
+        # Live is also required - go for it
+        self._state = self._ST_LIVE
+        return CONTINUE
+
+    def _load_from_data(self):
+        if not self.p.backfill_from.next():
+            # additional data source is consumed
+            self._state = self._ST_START
+            return CONTINUE
+
+        # copy lines of the same name
+        for alias in self.lines.getlinealiases():
+            lsrc = getattr(self.p.backfill_from.lines, alias)
+            ldst = getattr(self.lines, alias)
+
+            ldst[0] = lsrc[0]
+
+        return True
+
     def _load(self):
         self._process_errors()
 
@@ -588,224 +807,19 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
         while True:
             if self._state == self._ST_LIVE:
-                try:
-                    msg = (self._storedmsg.pop(None, None) or
-                           self.qlive.get(timeout=self._qcheck))
-                except queue.Empty:
-                    return None
-
-                if msg is None:  # Conn broken during historical/backfilling
-                    self._subcription_valid = False
-                    self.put_notification(self.CONNBROKEN)
-                    self.ib.set_losing_data(True)
-                    self._statelivereconn = self.p.backfill
-                    continue
-
-                if msg == -354:
-                    self.ib.set_losing_data(True)
-                    self.put_notification(self.NOTSUBSCRIBED)
-                    return False
-
-                elif isinstance(msg, integer_types):
-                    # Unexpected notification for historical data skip it
-                    # May be a "not connected not yet processed"
-                    self.put_notification(self.UNKNOWN, msg)
-                    continue
-
-                self.ib.set_losing_data(False)
-
-                # Process the message according to expected return type
-                if not self._statelivereconn:
-                    if self._laststatus != self.LIVE:
-                        if self.qlive.qsize() <= 1:  # very short live queue
-                            self.put_notification(self.LIVE)
-
-                    if self._usertvol and self._timeframe != bt.TimeFrame.Ticks:
-                        ret = self._load_rtvolume(msg)
-                    elif self._usertvol and self._timeframe == bt.TimeFrame.Ticks:
-                        ret = self._load_rtticks(msg)
-                    else:
-                        ret = self._load_rtbar(msg)
-                    if ret:
-                        return True
-
-                    # could not load bar ... go and get new one
-                    continue
-
-                # Fall through to processing reconnect - try to backfill
-                self._storedmsg[None] = msg  # keep the msg
-
-                # else do a backfill
-                if self._laststatus != self.DELAYED:
-                    self.put_notification(self.DELAYED)
-
-                dtend = None
-                if len(self) > 1:
-                    # len == 1 ... forwarded for the 1st time
-                    # get begin date in utc-like format like msg.datetime
-                    dtbegin = num2date(self.datetime[-1])
-                    dtbegin = pytz.utc.localize(dtbegin)
-                elif self.fromdate > float('-inf'):
-                    dtbegin = num2date(self.fromdate)
-                    dtbegin = pytz.utc.localize(dtbegin)
-                else:  # 1st bar and no begin set
-                    # passing None to fetch max possible in 1 request
-                    dtbegin = None
-
-                dtend = msg.datetime if self._usertvol else msg.time
-                self.p.todate = dtend
-                if dtend.tzinfo is not None:
-                    dtend = dtend.astimezone(pytz.utc)
-
-                if self._timeframe != bt.TimeFrame.Ticks:
-                    self._historical_ended = False
-                    self._historical_get_data = False
-                    self.qhist = self.ib.reqHistoricalDataEx(
-                        contract=self.contract, enddate=dtend, begindate=dtbegin,
-                        timeframe=self._timeframe, compression=self._compression,
-                        what=self.p.what, useRTH=self.p.useRTH, tz=self._tz,
-                        sessionend=self.p.sessionend, useSplit=self.p.use_date_split)
-                else:
-                    # dtend = num2date(dtend)
-                    self._historical_ended = False
-                    self._historical_get_data = False
-                    self.qhist = self.ib.reqHistoricalTicksEx(
-                        contract=self.contract, enddate=dtend,
-                        what=self.p.what, useRTH=self.p.useRTH, tz=self._tz,
-                        )
-
-                self._state = self._ST_HISTORBACK
-                self._statelivereconn = False  # no longer in live
-                continue
-
+                result = self._load_live_data()
             elif self._state == self._ST_HISTORBACK:
-                if self._historical_ended:
-                    return False
-
-                try:
-                    # There is no historical data sometimes, especially when start the data during the closed market
-                    if not self._historical_get_data:
-                        msg = self.qhist.get(timeout=self._qcheck)
-                    else:
-                        msg = self.qhist.get()
-                except queue.Empty:
-                    if self.p.historical:  # only historical
-                        if self._historical_get_date_time is None:
-                            self.logger.warning("We didn't get historical data, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
-                            self._historical_get_date_time = datetime.datetime.now()
-
-                        if datetime.datetime.now() - self._historical_get_date_time > datetime.timedelta(seconds=60):
-                            self.logger.warning("We didn't get historical data for 60 seconds, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
-                            self._historical_get_date_time = datetime.datetime.now()
-                        # self.put_notification(self.DISCONNECTED)
-                        return None  # end of historical
-
-                    # Live is also wished - go for it
-                    self._state = self._ST_LIVE
-                    continue
-
-                self._historical_get_data = True
-                self._historical_get_date_time = datetime.datetime.now()
-
-                if msg is None:  # Conn broken during historical/backfilling
-                    # Situation not managed. Simply bail out
-                    self._subcription_valid = False
-                    self._historical_ended = True
-                    # check the live mode
-                    if self.p.historical:
-                        self.put_notification(self.DISCONNECTED)
-                        return False
-                    else:
-                        # return back to Live mode
-                        self._state = self._ST_LIVE
-                        continue
-
-                elif msg == "WaitSplit":
-                    self._historical_get_data = False
-                    self._historical_get_date_time = None
-                    self.logger.info(f"Receive WaitSplit Msg, qcheck is {self._qcheck}")
-                    continue
-
-                elif msg in [162, 320, 321, 322]:
-                    if not self.p.ignore_fetcherror:
-                        # fetch the data again
-                        sleep_time = self._fix_fetch_todate()
-                        self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
-                        time.sleep(sleep_time)
-                        self._st_start()
-                        self._historical_get_data = False
-                        self._historical_get_date_time = None
-                        continue
-
-                    self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
-                    # stop data
-                    self._subcription_valid = False
-                    self._historical_ended = True
-                    # check the live mode
-                    if self.p.historical:
-                        self.put_notification(self.DISCONNECTED)
-                        return False
-                    else:
-                        # return back to Live mode
-                        self._state = self._ST_LIVE
-                        continue
-
-                elif msg == -354:  # Data not subscribed
-                    self._subcription_valid = False
-                    self.put_notification(self.NOTSUBSCRIBED)
-                    return False
-
-                elif msg == -420:  # No permissions for the data
-                    self._subcription_valid = False
-                    self.put_notification(self.NOTSUBSCRIBED)
-                    return False
-
-                elif isinstance(msg, integer_types):
-                    # Unexpected notification for historical data skip it
-                    # May be a "not connected not yet processed"
-                    self.put_notification(self.UNKNOWN, msg)
-                    continue
-
-                self.ib.set_losing_data(False)
-
-                if msg.date is not None:
-                    if self._timeframe == bt.TimeFrame.Ticks:
-                        if self._load_rtticks(msg, hist=True):
-                            return True
-                    else:
-                        if self._load_rtbar(msg, hist=True):
-                            return True  # loading worked
-
-                    # the date is from overlapping historical request
-                    continue
-
-                # End of histdata
-                if self.p.historical:  # only historical
-                    self.put_notification(self.DISCONNECTED)
-                    return False  # end of historical
-
-                # Live is also required - go for it
-                self._state = self._ST_LIVE
-                continue
-
+                result = self._load_histrial_data()
             elif self._state == self._ST_FROM:
-                if not self.p.backfill_from.next():
-                    # additional data source is consumed
-                    self._state = self._ST_START
-                    continue
-
-                # copy lines of the same name
-                for alias in self.lines.getlinealiases():
-                    lsrc = getattr(self.p.backfill_from.lines, alias)
-                    ldst = getattr(self.lines, alias)
-
-                    ldst[0] = lsrc[0]
-
-                return True
-
+                result = self._load_from_data()
             elif self._state == self._ST_START:
                 if not self._st_start():
                     return False
+
+            if result == CONTINUE:
+                continue
+            else:
+                return result
 
     def _st_start(self):
         if self.p.historical:
