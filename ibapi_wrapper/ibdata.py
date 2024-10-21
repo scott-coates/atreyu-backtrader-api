@@ -909,36 +909,36 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         if rtdata.field == 'LAST_PRICE':
             self.lines.close[0] = rtdata.value
 
-            self.lines.open[0] = None
-            self.lines.high[0] = None
-            self.lines.low[0] = None
-            self.lines.volume[0] = None
-            self.lines.openinterest[0] = None
+            self.lines.open[0] = float('-inf')
+            self.lines.high[0] = float('-inf')
+            self.lines.low[0] = float('-inf')
+            self.lines.volume[0] = float('-inf')
+            self.lines.openinterest[0] = float('-inf')
         elif rtdata.field == 'HIGH':
             self.lines.high[0] = rtdata.value
 
-            self.lines.close[0] = None
-            self.lines.open[0] = None
-            self.lines.low[0] = None
-            self.lines.volume[0] = None
-            self.lines.openinterest[0] = None
+            self.lines.close[0] = float('-inf')
+            self.lines.open[0] = float('-inf')
+            self.lines.low[0] = float('-inf')
+            self.lines.volume[0] = float('-inf')
+            self.lines.openinterest[0] = float('-inf')
         elif rtdata.field == 'LOW':
             self.lines.low[0] = rtdata.value
 
-            self.lines.close[0] = None
-            self.lines.open[0] = None
-            self.lines.high[0] = None
-            self.lines.volume[0] = None
-            self.lines.openinterest[0] = None
+            self.lines.close[0] = float('-inf')
+            self.lines.open[0] = float('-inf')
+            self.lines.high[0] = float('-inf')
+            self.lines.volume[0] = float('-inf')
+            self.lines.openinterest[0] = float('-inf')
 
         elif rtdata.field == 'VOLUME':
-            self.lines.volume[0] = rtdata.size
+            self.lines.volume[0] = rtdata.value
 
-            self.lines.close[0] = None
-            self.lines.open[0] = None
-            self.lines.high[0] = None
-            self.lines.low[0] = None
-            self.lines.openinterest[0] = None
+            self.lines.close[0] = float('-inf')
+            self.lines.open[0] = float('-inf')
+            self.lines.high[0] = float('-inf')
+            self.lines.low[0] = float('-inf')
+            self.lines.openinterest[0] = float('-inf')
 
         else:
             return False
