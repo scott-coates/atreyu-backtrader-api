@@ -1606,6 +1606,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
                     self.iscash[tickerId] = 2
 
         # request live data
+        store_logger.info(f"Request Market Data, parameters are: {tickerId} {contract}, {ticks}")
         self.conn.reqMarketDataType(1)
         self.conn.reqMktData(tickerId, contract, bytes(ticks), False, False, [])
         return q
