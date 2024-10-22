@@ -39,9 +39,11 @@ from backtrader.utils import AutoDict, TZLocal  # type: ignore
 from ibapi.client import EClient
 from ibapi.wrapper import EWrapper
 from ibapi.contract import Contract
-from ibapi.ticktype import TickTypeEnum
+from ibapi.common import TickAttrib
+from enum import Enum, auto
 import logging
 import pytz
+import tzlocal
 
 bytes = bstr  # py2/3 need for ibpy
 
@@ -103,93 +105,130 @@ class OrderStatusMsg(object):
         return f'{self.vars}'
 
 
-def _ts2dt(tstamp=None):
-    # Transforms a RTVolume timestamp to a datetime object
-    if not tstamp:
-        return datetime.datetime.utcnow()
-
-    sec, msec = divmod(long(tstamp), 1000)
-    usec = msec * 1000
-    return datetime.datetime.utcfromtimestamp(sec).replace(microsecond=usec)
-
-
-class RTVolume(object):
-    '''Parses a tickString tickType 48 (RTVolume) event from the IB API into its
-    constituent fields
-
-    Supports using a "price" to simulate an RTVolume from a tickPrice event
+class TickFieldEnum(Enum):
+    '''Enum for tick fields
     '''
-    _fields = [
-        ('price', float),
-        ('size', float),
-        ('datetime', _ts2dt),
-        ('volume', float),
-        ('vwap', float),
-        ('single', bool)
-    ]
+    BID_SIZE = 0
+    BID_PRICE = auto()
+    ASK_PRICE = auto()
+    ASK_SIZE = auto()
+    LAST_PRICE = auto()
+    LAST_SIZE = auto()
+    HIGH = auto()
+    LOW = auto()
+    VOLUME = auto()
+    CLOSE = auto()
+    BID_OPTION_COMPUTATION = auto()
+    ASK_OPTION_COMPUTATION = auto()
+    LAST_OPTION_COMPUTATION = auto()
+    MODEL_OPTION = auto()
+    OPEN = auto()
+    LOW_13_WEEK = auto()
+    HIGH_13_WEEK = auto()
+    LOW_26_WEEK = auto()
+    HIGH_26_WEEK = auto()
+    LOW_52_WEEK = auto()
+    HIGH_52_WEEK = auto()
+    AVG_VOLUME = auto()
+    OPEN_INTEREST = auto()
+    OPTION_HISTORICAL_VOL = auto()
+    OPTION_IMPLIED_VOL = auto()
+    OPTION_BID_EXCH = auto()
+    OPTION_ASK_EXCH = auto()
+    OPTION_CALL_OPEN_INTEREST = auto()
+    OPTION_PUT_OPEN_INTEREST = auto()
+    OPTION_CALL_VOLUME = auto()
+    OPTION_PUT_VOLUME = auto()
+    INDEX_FUTURE_PREMIUM = auto()
+    BID_EXCH = auto()
+    ASK_EXCH = auto()
+    AUCTION_VOLUME = auto()
+    AUCTION_PRICE = auto()
+    AUCTION_IMBALANCE = auto()
+    MARK_PRICE = auto()
+    BID_EFP_COMPUTATION = auto()
+    ASK_EFP_COMPUTATION = auto()
+    LAST_EFP_COMPUTATION = auto()
+    OPEN_EFP_COMPUTATION = auto()
+    HIGH_EFP_COMPUTATION = auto()
+    LOW_EFP_COMPUTATION = auto()
+    CLOSE_EFP_COMPUTATION = auto()
+    LAST_TIMESTAMP = auto()
+    SHORTABLE = auto()
+    FUNDAMENTAL_RATIOS = auto()
+    RT_VOLUME = auto()
+    HALTED = auto()
+    BID_YIELD = auto()
+    ASK_YIELD = auto()
+    LAST_YIELD = auto()
+    CUST_OPTION_COMPUTATION = auto()
+    TRADE_COUNT = auto()
+    TRADE_RATE = auto()
+    VOLUME_RATE = auto()
+    LAST_RTH_TRADE = auto()
+    RT_HISTORICAL_VOL = auto()
+    IB_DIVIDENDS = auto()
+    BOND_FACTOR_MULTIPLIER = auto()
+    REGULATORY_IMBALANCE = auto()
+    NEWS_TICK = auto()
+    SHORT_TERM_VOLUME_3_MIN = auto()
+    SHORT_TERM_VOLUME_5_MIN = auto()
+    SHORT_TERM_VOLUME_10_MIN = auto()
+    DELAYED_BID = auto()
+    DELAYED_ASK = auto()
+    DELAYED_LAST = auto()
+    DELAYED_BID_SIZE = auto()
+    DELAYED_ASK_SIZE = auto()
+    DELAYED_LAST_SIZE = auto()
+    DELAYED_HIGH = auto()
+    DELAYED_LOW = auto()
+    DELAYED_VOLUME = auto()
+    DELAYED_CLOSE = auto()
+    DELAYED_OPEN = auto()
+    RT_TRD_VOLUME = auto()
+    CREDITMAN_MARK_PRICE = auto()
+    CREDITMAN_SLOW_MARK_PRICE = auto()
+    DELAYED_BID_OPTION_COMPUTATION = auto()
+    DELAYED_ASK_OPTION_COMPUTATION = auto()
+    DELAYED_LAST_OPTION_COMPUTATION = auto()
+    DELAYED_MODEL_OPTION = auto()
+    LAST_EXCH = auto()
+    LAST_REG_TIME = auto()
+    FUTURES_OPEN_INTEREST = auto()
+    AVG_OPT_VOLUME = auto()
+    DELAYED_LAST_TIMESTAMP = auto()
+    SHORTABLE_SHARES = auto()
+    DELAYED_HALTED = auto()
 
-    def __init__(self, rtvol='', price=None, tmoffset=None):
-        # Use a provided string or simulate a list of empty tokens
-        tokens = iter(rtvol.split(';'))
+class RTTickData(object):
+    def __init__(self, field, value, additional=None):
+        self.valid = False
+        self.field = None
+        self.value = None
+        self.datetime = None
+        self.additional = None
 
-        # Put the tokens as attributes using the corresponding func
-        for name, func in self._fields:
-            setattr(self, name, func(next(tokens)) if rtvol else func())
+        try:
+            self.field = TickFieldEnum(field).name
+            self.value = value
+            self.additional = additional
+            self.datetime = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
+            self.valid = True
+        except ValueError:
+            store_logger.error(f"Unknown tick field: {field}")
+            self.valid = False
+            self.field = None
+            self.value = None
+            self.additional = None
+            self.datetime = None
 
-        # If price was provided use it
-        if price is not None:
-            self.price = price
-
-        if tmoffset is not None:
-            self.datetime += tmoffset
         self.vars = vars()
 
     def __str__(self):
         return f'{self.vars}'
 
-
-class RTPrice(object):
-    '''Set price from a tickPrice
-    '''
-    def __init__(self, price, tmoffset=None):
-        # No size for tickPrice
-        self.size = None
-
-        # Set the price
-        self.price = price
-
-        # Set price to when we received it
-        self.datetime = datetime.datetime.now()
-
-        if tmoffset is not None:
-            self.datetime += tmoffset
-        self.vars = vars()
-
-    def __str__(self):
-        return f'{self.vars}'
-
-
-class RTSize(object):
-    '''Set size from a tickSize
-    '''
-    def __init__(self, size, tmoffset=None):
-        # No size for tickPrice
-        self.price = None
-
-        # Set the size
-        self.size = size
-
-        # Set price to when we received it
-        self.datetime = datetime.datetime.now()
-
-        if tmoffset is not None:
-            self.datetime += tmoffset
-
-        self.vars = vars()
-
-    def __str__(self):
-        return f'{self.vars}'
-
+    def is_valid(self):
+        return self.valid
 
 class RTBar(object):
     '''Set realtimeBar object
@@ -1568,7 +1607,25 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         '''
         # get a ticker/queue for identification/data delivery
         tickerId, q = self.getTickerQueue()
-        ticks = '233'  # request RTVOLUME tick delivered over tickString
+        # Low 13 Weeks	Lowest price for the last 13 weeks. For stocks only.	165	IBApi.EWrapper.tickPrice	15
+        # High 13 Weeks	Highest price for the last 13 weeks. For stocks only.	165	IBApi.EWrapper.tickPrice	16
+        # Low 26 Weeks	Lowest price for the last 26 weeks. For stocks only.	165	IBApi.EWrapper.tickPrice	17
+        # High 26 Weeks	Highest price for the last 26 weeks. For stocks only.	165	IBApi.EWrapper.tickPrice	18
+        # Low 52 Weeks	Lowest price for the last 52 weeks. For stocks only.	165	IBApi.EWrapper.tickPrice	19
+        # High 52 Weeks	Highest price for the last 52 weeks. For stocks only.	165	IBApi.EWrapper.tickPrice	20
+        # Average Volume	The average daily trading volume over 90 days. Multiplier of 100. For stocks only.	165	IBApi.EWrapper.tickSize	21
+        # Mark Price	“The mark price is the current theoretical calculated value of an instrument. Since it is a calculated value it will typically have many digits of precision.”	232	IBApi.EWrapper.tickPrice	37
+        # Shortable	Describes the level of difficulty with which the contract can be sold short. See Shortable	236	IBApi.EWrapper.tickGeneric	46
+        # Trade Count	Trade count for the day.	293	IBApi.EWrapper.tickGeneric	54
+        # Trade Rate	Trade count per minute.	294	IBApi.EWrapper.tickGeneric	55
+        # Volume Rate	Volume per minute.	295	IBApi.EWrapper.tickGeneric	56
+        # Last RTH Trade	Last Regular Trading Hours traded price.	318	IBApi.EWrapper.tickPrice	57
+        # RT Historical Volatility	30-day real time historical volatility.	411	IBApi.EWrapper.tickGeneric	58
+        # Short-Term Volume 3 Minutes	The past three minutes volume. Interpolation may be applied. For stocks only.	595	IBApi.EWrapper.tickSize	63
+        # Short-Term Volume 5 Minutes	The past five minutes volume. Interpolation may be applied. For stocks only.	595	IBApi.EWrapper.tickSize	64
+        # Short-Term Volume 10 Minutes	The past ten minutes volume. Interpolation may be applied. For stocks only.	595	IBApi.EWrapper.tickSize	65
+
+        ticks = '165,232,236,293,294,295,318,411,595'  # request RTVOLUME tick delivered over tickString
 
         if contract.secType in ['CASH', 'CFD']:
             with self._lock_q:
@@ -1577,8 +1634,9 @@ class IBStore(with_metaclass(MetaSingleton, object)):
                 if what == 'ASK':
                     self.iscash[tickerId] = 2
 
-        # q.put(None)  # to kickstart backfilling
-        # Can request 233 also for cash ... nothing will arrive
+        # request live data
+        store_logger.info(f"Request Market Data, parameters are: {tickerId} {contract}, {ticks}")
+        self.conn.reqMarketDataType(1)
         self.conn.reqMktData(tickerId, contract, bytes(ticks), False, False, [])
         return q
 
@@ -1631,90 +1689,63 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         store_logger.debug(f"Cancel data queue for {tickerId}")
         self.cancelQueue(q, True)
     
-    def tickString(self, reqId, tickType, value):
-        # Receive and process a tickString message
+    def tickString(self, reqId, field: int, value: float):
+        """Receive and process a tickString message"""
+        tickId = reqId
+        rtdata = RTTickData(field, value)
+        if rtdata.is_valid():
+            with self._lock_q:
+                q = self.qs[tickId]
+            q.put(rtdata)
+
+    def tickPrice(self, reqId, field: int, price: float, attrib: TickAttrib):
+        "Receives a tickPrice message"
+        # The meaning of the integer value is mentioned in the IB API: https://www.interactivebrokers.com/campus/ibkr-api-page/twsapi-doc/#available-tick-types
         tickerId = reqId
-        if tickType == 48:  # RTVolume
-            try:
-                rtvol = RTVolume(value)
-            except ValueError:  # price not in message ...
-                pass
-            else:
-                # Don't need to adjust the time, because it is in "timestamp"
-                # form in the message
-                with self._lock_q:
-                    q = self.qs[tickerId]
-                q.put(rtvol)
-
-    def tickPrice(self, reqId, tickType, price, attrib):
-        '''Cash Markets have no notion of "last_price"/"last_size" and the
-        tracking of the price is done (industry de-facto standard at least with
-        the IB API) following the BID price
-
-        A RTVolume which will only contain a price is put into the client's
-        queue to have a consistent cross-market interface
-        '''
-
-        # Used for "CASH" markets
-        # The price field has been seen to be missing in some instances even if
-        # "field" is 1
-        tickerId = reqId
-        with self._lock_q:
-            fieldcode = self.iscash[tickerId]
-        if fieldcode:
-            if tickType == fieldcode:  # Expected cash field code
-                try:
-                    if price == -1.0:
-                        # seems to indicate the stream is halted for example in
-                        # between 23:00 - 23:15 CET for FOREX
-                        return
-                except AttributeError:
-                    pass
-
-                try:
-                    rtvol = RTVolume(price=price, tmoffset=self.tmoffset)
-                    # print('rtvol with datetime:', rtvol.datetime)
-                except ValueError:  # price not in message ...
-                    pass
-                else:
-                    with self._lock_q:
-                        q = self.qs[tickerId]
-                    q.put(rtvol)
-        else:
-            # Non-cash
-            try:
-                if price == -1.0:
-                    # seems to indicate the stream is halted for example in
-                    # between 23:00 - 23:15 CET for FOREX
-                    return
-            except AttributeError:
-                pass
-            rtprice = RTPrice(price=price, tmoffset=self.tmoffset)
+        rtdata = RTTickData(field, price, attrib)
+        if rtdata.is_valid():
             with self._lock_q:
                 q = self.qs[tickerId]
-            q.put(rtprice)
+            q.put(rtdata)
 
-    def tickSize(self, reqId, tickType, size):
+    def tickSize(self, reqId, field:int, value: float):
+        "Receives a tickSize message"
         tickerId = reqId
-        rtsize = RTSize(size=size, tmoffset=self.tmoffset)
-        with self._lock_q:
-            q = self.qs[tickerId]
-        q.put(rtsize)
+        rtsize = RTTickData(field, value)
+        if rtsize.is_valid():
+            with self._lock_q:
+                q = self.qs[tickerId]
+            q.put(rtsize)
 
-    def tickGeneric(self, reqId, tickType, value):
-        try:
-            if value == -1.0:
-                # seems to indicate the stream is halted for example in
-                # between 23:00 - 23:15 CET for FOREX
-                return
-        except AttributeError:
-            pass
+    def tickGeneric(self, reqId, field: int, value: float):
+        '''Receives a tickGeneric message'''
         tickerId = reqId
-        value = value # if msg.value != 0.0 else (1.0 + random.random())
-        rtprice = RTPrice(price=value, tmoffset=self.tmoffset)
-        with self._lock_q:
-            q = self.qs[tickerId]
-        q.put(rtprice)
+        if field == 54:  # Trade Count, Trade count for the day.
+            store_logger.info(f"today's trade count: {value}")
+        elif field == 49:  # contract halt
+            if value == -1:  # Halted status not available. Usually returned with frozen data.
+                store_logger.info("contract halt: Halted status not available. Usually returned with frozen data.")
+            elif value == 0:  # Not halted. This value will only be returned if the contract is in a TWS watchlist.
+                store_logger.info("contract halt: Not halted.")
+            elif value == 1:  # General halt. Trading halt is imposed for purely regulatory reasons with/without volatility halt.
+                store_logger.warn("contract halt: General halt. !!!!!!!!!!")
+            elif value == 2:  # Volatility halt. Trading halt is imposed due to volatility and not regulatory reasons.
+                store_logger.error("contract halt: Volatility halt.!!!!!!!!!!!!!!")
+            else:
+                store_logger.warn(f"contract halt: {value} is not a valid value.")
+        elif field == 55:  # Trade Rate, Trade count per minute.
+            store_logger.info(f"trade rate per minute: {value}")
+        elif field == 56:  # Volume Rate, Volume per minute.
+            store_logger.info(f"volume rate per minute: {value}")
+        elif field == 58:  # RT Historical Volatility, 30-day real time historical volatility.
+            store_logger.info(f"30-day real time historical volatility: {value}")
+        elif field == 46:  # Describes the level of difficulty with which the contract can be sold short. See Shortable
+            if value > 2.5:
+                store_logger.info("Shortable: Easy to borrow")
+            elif value > 1.5:
+                store_logger.info("Shortable: Available")
+            else:
+                store_logger.info("Shortable: Hard to borrow")
 
     def realtimeBar(self, msg):
         '''Receives x seconds Real Time Bars (at the time of writing only 5
