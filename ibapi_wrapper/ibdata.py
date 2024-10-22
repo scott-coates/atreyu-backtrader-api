@@ -328,6 +328,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.init_logger()
         self.init_trade_hours_data()
         self._retry_fetch_method = None
+        self._lose_connection = False
 
     def init_trade_hours_data(self):
         self._liquid_hours = {}
@@ -802,6 +803,9 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
     def _load(self):
         self._process_errors()
 
+        if self._lose_connection:
+            return False
+
         if self.contract is None or self._state == self._ST_OVER:
             return False  # nothing can be done
 
@@ -815,6 +819,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             elif self._state == self._ST_START:
                 if not self._st_start():
                     return False
+                else:
+                    result = CONTINUE
 
             if result == CONTINUE:
                 continue
@@ -973,10 +979,19 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         while not self.qerror.empty():
             msg = self.qerror.get()
 
-            if msg.errorCode in [502, 504, 1102, 1101, 10225]:
+            if msg == "reconnected":
+                self._lose_connection = False
+                self.put_notification(self.CONNECTED)
+                self._state = self._ST_START
+                self.qhist = None
+                self.qlive = None
+                self._subcription_valid = False
+                self._storedmsg = dict()
+            elif msg.errorCode in [502, 504, 1102, 1101, 10225]:
                 self._subcription_valid = False
                 self.put_notification(self.CONNBROKEN)
                 self._statelivereconn = self.p.backfill
+                self._lose_connection = True
             else:
                 pass
 
