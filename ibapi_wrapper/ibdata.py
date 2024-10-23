@@ -329,6 +329,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.init_trade_hours_data()
         self._retry_fetch_method = None
         self._lose_connection = False
+        self._lose_connection_time = None
 
     def init_trade_hours_data(self):
         self._liquid_hours = {}
@@ -558,7 +559,12 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # if that, we will lose market data
             # so when there is a minute or second data error, just wait the market open
             # sleep one minute and move the end data
-            self.p.todate += datetime.timedelta(minutes=1)
+            if self._lose_connection_time:
+                lose_delta = local_dt - self._lose_connection_time
+                self._lose_connection_time = None
+                self.p.todate += lose_delta
+            else:
+                self.p.todate += datetime.timedelta(minutes=1)
             sleep = 60
             if self.p.todate.tzinfo is None:
                 self.p.todate = self._gettz().localize(self.p.todate)
@@ -804,7 +810,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self._process_errors()
 
         if self._lose_connection:
-            return False
+            return None
 
         if self.contract is None or self._state == self._ST_OVER:
             return False  # nothing can be done
@@ -992,6 +998,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 self.put_notification(self.CONNBROKEN)
                 self._statelivereconn = self.p.backfill
                 self._lose_connection = True
+                self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
             else:
                 pass
 

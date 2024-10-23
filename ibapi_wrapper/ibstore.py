@@ -1166,6 +1166,10 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             else:
                 q.put(msg.errorCode)
 
+        elif msg.errorCode == 165:  #  Historical Market Data Service query message:HMDS server connection was successful.
+            # do nothing
+            pass
+
         elif msg.errorCode in [200, 203]:
             # cdetails 200 security not found, notify over right queue
             # cdetails 203 security not allowed for acct
