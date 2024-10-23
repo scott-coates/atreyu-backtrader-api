@@ -998,7 +998,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 self.put_notification(self.CONNBROKEN)
                 self._statelivereconn = self.p.backfill
                 self._lose_connection = True
-                self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
+                if self._lose_connection_time is None:
+                    self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
             else:
                 pass
 
