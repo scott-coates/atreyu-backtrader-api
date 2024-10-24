@@ -562,6 +562,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             if self._lose_connection_time:
                 lose_delta = local_dt - self._lose_connection_time
                 self._lose_connection_time = None
+                self.logger.info(f"Fix the fetch todate in disconnection, todate is {self.p.todate} lose delta is {lose_delta}")
                 self.p.todate += lose_delta
             else:
                 self.p.todate += datetime.timedelta(minutes=1)
@@ -993,6 +994,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 self.qlive = None
                 self._subcription_valid = False
                 self._storedmsg = dict()
+                self.logger.info(f"Receive reconnected message, set the connection to True {self._name}")
             elif msg.errorCode in [502, 504, 1102, 1101, 10225]:
                 self._subcription_valid = False
                 self.put_notification(self.CONNBROKEN)
@@ -1000,6 +1002,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 self._lose_connection = True
                 if self._lose_connection_time is None:
                     self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
+                self.logger.info(f"Receive connection error {msg.errorCode}, set the connection to False {self._name}")
             else:
                 pass
 
