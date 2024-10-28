@@ -811,6 +811,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self._process_errors()
 
         if self._lose_connection:
+            self.logger.info(f"Fetch data lose connection, todate is {self.p.todate} sleep for {self.p.qcheck}")
+            time.sleep(self.p.qcheck)
             return None
 
         if self.contract is None or self._state == self._ST_OVER:
