@@ -331,6 +331,12 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self._lose_connection = False
         self._lose_connection_time = None
 
+    def skip_data(self):
+        if self._lose_connection:
+            return True
+        else:
+            return False
+
     def init_trade_hours_data(self):
         self._liquid_hours = {}
         self._trade_ours = {}
@@ -1009,6 +1015,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 pass
 
     def push_error(self, msg):
+        self.logger.info(f"Push error message: {msg} {self._name}")
         self.qerror.put(msg)
 
     def _parse_trading_hours(self, hours_str):
