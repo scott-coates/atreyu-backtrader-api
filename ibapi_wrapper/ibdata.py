@@ -1017,16 +1017,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         while not self.qerror.empty():
             msg = self.qerror.get()
 
-            if msg == "reconnected":
-                self._lose_connection = False
-                self.put_notification(self.CONNECTED)
-                self._state = self._ST_START
-                self.qhist = None
-                self.qlive = None
-                self._subcription_valid = False
-                self._storedmsg = dict()
-                self.logger.info(f"Receive reconnected message, set the connection to True {self._name}")
-            elif msg.errorCode in [502, 504, 1102, 1101, 10225]:
+            if msg.errorCode in [502, 504, 1102, 1101, 10225]:
                 self._subcription_valid = False
                 self.put_notification(self.CONNBROKEN)
                 self._statelivereconn = self.p.backfill
@@ -1035,11 +1026,26 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
                 self.logger.info(f"Receive connection error {msg.errorCode}, set the connection to False {self._name}")
             else:
+                self.logger.info(f"Receive error message: {msg.errorCode} {msg.errorMsg} {self._name} pass throuhg")
                 pass
 
     def push_error(self, msg):
         self.logger.info(f"Push error message: {msg} {self._name}")
-        self.qerror.put(msg)
+        if msg == "reconnected":
+            self._lose_connection = False
+            self.put_notification(self.CONNECTED)
+            if self.p.historical:
+                if not self._historical_ended:
+                    self._state = self._ST_START
+            else:
+                self._state = self._ST_START
+            self.qhist = None
+            self.qlive = None
+            self._subcription_valid = False
+            self._storedmsg = dict()
+            self.logger.info(f"Receive reconnected message, set the connection to True {self._name}")
+        else:
+            self.qerror.put(msg)
 
     def _parse_trading_hours(self, hours_str):
         sessions = {}
