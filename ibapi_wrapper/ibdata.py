@@ -269,6 +269,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('use_date_split', False),  # split date when date range exceeds max duration
         ('ignore_incomplete', False),  # ignore incomplete data
         ('ignore_fetcherror', False),  # ignore fetch error
+        ('live_retry_times', 3),       # when fetch backfill data failed, retry maximinum times
     )
 
     _store = ibstore.IBStore
@@ -330,6 +331,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self._retry_fetch_method = None
         self._lose_connection = False
         self._lose_connection_time = None
+        self._live_retry_times = None
 
     def skip_data(self):
         if self._lose_connection:
@@ -553,6 +555,15 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         qwait = max(0.0, qwait - qlapse)
         self._qcheck = qwait
 
+    def _check_and_reset_live_historical_data_retry(self):
+        if self.p.historical:
+            return
+
+        if self._live_retry_times is not None:
+            self._live_retry_times = None
+            self._statelivereconn = False
+            self.logger.info(f"data({self._name}) fetch live historical data success, reset the retry times")
+
     def _fix_fetch_todate(self):
         local_timezone = tzlocal.get_localzone_name()
         local_dt = pytz.timezone(local_timezone).localize(datetime.datetime.now())
@@ -712,6 +723,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
             # Live is also wished - go for it
             self._state = self._ST_LIVE
+            self._check_and_reset_live_historical_data_retry()
             return CONTINUE
 
         self._historical_get_data = True
@@ -728,6 +740,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             else:
                 # return back to Live mode
                 self._state = self._ST_LIVE
+                self._check_and_reset_live_historical_data_retry()
                 return CONTINUE
 
         elif msg == "WaitSplit":
@@ -737,27 +750,35 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             return CONTINUE
 
         elif msg in [162, 320, 321, 322]:
-            if not self.p.ignore_fetcherror:
-                # fetch the data again
-                sleep_time = self._fix_fetch_todate()
-                self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
-                time.sleep(sleep_time)
-                self._st_start()
-                self._historical_get_data = False
-                self._historical_get_date_time = None
-                return CONTINUE
-
-            self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
-            # stop data
-            self._subcription_valid = False
-            self._historical_ended = True
-            # check the live mode
             if self.p.historical:
-                self.put_notification(self.DISCONNECTED)
-                return False
+                if not self.p.ignore_fetcherror:
+                    # fetch the data again
+                    sleep_time = self._fix_fetch_todate()
+                    self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
+                    time.sleep(sleep_time)
+                    self._st_start()
+                    self._historical_get_data = False
+                    self._historical_get_date_time = None
+                    return CONTINUE
+                else:
+                    self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
+                    # stop data
+                    self._subcription_valid = False
+                    self._historical_ended = True
+                    self.put_notification(self.DISCONNECTED)
             else:
-                # return back to Live mode
-                self._state = self._ST_LIVE
+                # try to fetch the data again
+                if self._live_retry_times is None:
+                    self._live_retry_times = self.p.live_retry_times
+
+                if self._live_retry_times > 0:
+                    self._live_retry_times -= 1
+                    self._statelivereconn = self.p.backfill
+                    self.logger.info(f"Try again to fetch live data({self._name}), qcheck is {self._qcheck}, retry times {self._live_retry_times}")
+                    time.sleep(self._qcheck)
+                else:
+                    self.logger.info(f"Fetch live historical data({self._name}) failed, ignore the data")
+                    self._statelivereconn = False
                 return CONTINUE
 
         elif msg == -354:  # Data not subscribed
@@ -774,9 +795,11 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # Unexpected notification for historical data skip it
             # May be a "not connected not yet processed"
             self.put_notification(self.UNKNOWN, msg)
+            self.logger.info(f"Receive unknown error msg {msg}")
             return CONTINUE
 
         self.ib.set_losing_data(False)
+        self._check_and_reset_live_historical_data_retry()
 
         if msg.date is not None:
             if self._timeframe == bt.TimeFrame.Ticks:
