@@ -1164,7 +1164,9 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             except KeyError:
                 store_logger.warn(f"Cancel data queue for {msg.reqId} failed. Cannot find the queue")
             else:
+                store_logger.info(f"Put error code and cancel data queue for {msg.reqId} to avoid memory leak")
                 q.put(msg.errorCode)
+                self.cancelQueue(q)
 
         elif msg.errorCode == 165:  #  Historical Market Data Service query message:HMDS server connection was successful.
             # do nothing
