@@ -335,6 +335,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
     def skip_data(self):
         if self._lose_connection:
+            self.logger.info(f"Skip {self._name} data because of losing connection")
             return True
         else:
             return False
@@ -712,11 +713,11 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         except queue.Empty:
             if self.p.historical:  # only historical
                 if self._historical_get_date_time is None:
-                    self.logger.warning("We didn't get historical data, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
+                    self.logger.warning(f"We didn't get historical data {self._name}, consider to set the self.p.qcheck from {self._qcheck} to 0.0 to accelerate the process.")
                     self._historical_get_date_time = datetime.datetime.now()
 
                 if datetime.datetime.now() - self._historical_get_date_time > datetime.timedelta(seconds=60):
-                    self.logger.warning("We didn't get historical data for 60 seconds, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
+                    self.logger.warning(f"We didn't get historical data {self._name} for 60 seconds, consider to set the self.p.qcheck from {self._qcheck} to 0.0 to accelerate the process.")
                     self._historical_get_date_time = datetime.datetime.now()
                 # self.put_notification(self.DISCONNECTED)
                 return None  # end of historical
@@ -766,6 +767,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self._subcription_valid = False
                     self._historical_ended = True
                     self.put_notification(self.DISCONNECTED)
+                    return False
             else:
                 # try to fetch the data again
                 if self._live_retry_times is None:
@@ -840,7 +842,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self._process_errors()
 
         if self._lose_connection:
-            self.logger.info(f"Fetch data lose connection, todate is {self.p.todate} sleep for {self.p.qcheck}")
+            self.logger.info(f"Fetch data lose connection, {self._name}, todate is {self.p.todate} sleep for {self.p.qcheck}")
             time.sleep(self.p.qcheck)
             return None
 
@@ -1043,7 +1045,11 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             self.qlive = None
             self._subcription_valid = False
             self._storedmsg = dict()
-            self.logger.info(f"Receive reconnected message, set the connection to True {self._name}")
+            self.logger.info(f"Receive reconnected message, set the connection to {self._lose_connection} {self._name}")
+        elif msg == "reconnect_finished":
+            if self._state == self._ST_START:
+                self._st_start()
+                self.logger.info(f"Receive reconnect finished message, start the data {self._name}")
         else:
             self.qerror.put(msg)
 

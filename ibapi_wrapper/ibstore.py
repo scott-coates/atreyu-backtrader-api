@@ -2300,7 +2300,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         self.apiThread = threading.Thread(target=self.conn.run, name="reconnect_ibapi_run", daemon=True)
         self.apiThread.start()
 
-        # told all datas the connection is reconnected
+        # tell all datas the connection is reconnected
         for data in self.datas:
             if data is not None:
                 data.push_error("reconnected")
@@ -2325,3 +2325,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # start data request again
         # the old threads will exit later
         self.startdatas()
+
+        # tell all datas connection has been reseted
+        for data in self.datas:
+            if data is not None:
+                data.push_error("reconnect_finished")
