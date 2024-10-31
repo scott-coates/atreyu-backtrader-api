@@ -772,6 +772,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self._historical_get_date_time = None
 
                     if self._hist_retry_times is not None:
+                        self.logger.info(f"Error {msg} in {self._name} and Retry times {self._hist_retry_times}")
                         self._hist_retry_times -= 1
                     return CONTINUE
                 else:
