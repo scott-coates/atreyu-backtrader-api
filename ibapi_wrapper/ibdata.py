@@ -269,7 +269,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('use_date_split', False),  # split date when date range exceeds max duration
         ('ignore_incomplete', False),  # ignore incomplete data
         ('ignore_fetcherror', False),  # ignore fetch error
-        ('live_retry_times', 3),       # when fetch backfill data failed, retry maximinum times
+        ('data_retry_times', 3),       # when fetch backfill data failed, retry maximinum times
     )
 
     _store = ibstore.IBStore
@@ -332,6 +332,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self._lose_connection = False
         self._lose_connection_time = None
         self._live_retry_times = None
+        self._hist_retry_times = None
 
     def skip_data(self):
         if self._lose_connection:
@@ -720,6 +721,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self.logger.warning(f"We didn't get historical data {self._name} for 60 seconds, consider to set the self.p.qcheck from {self._qcheck} to 0.0 to accelerate the process.")
                     self._historical_get_date_time = datetime.datetime.now()
                 # self.put_notification(self.DISCONNECTED)
+                self._hist_retry_times = None
                 return None  # end of historical
 
             # Live is also wished - go for it
@@ -737,6 +739,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # check the live mode
             if self.p.historical:
                 self.put_notification(self.DISCONNECTED)
+                self._hist_retry_times = None
                 return False
             else:
                 # return back to Live mode
@@ -753,6 +756,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         elif msg in [162, 320, 321, 322]:
             if self.p.historical:
                 if not self.p.ignore_fetcherror:
+                    if self._hist_retry_times is None:
+                        self._hist_retry_times = self.p.data_retry_times
+
+                    if self._hist_retry_times < 0:
+                        self._hist_retry_times = None
+                        return None
+
                     # fetch the data again
                     sleep_time = self._fix_fetch_todate()
                     self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
@@ -760,6 +770,9 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self._st_start()
                     self._historical_get_data = False
                     self._historical_get_date_time = None
+
+                    if self._hist_retry_times is not None:
+                        self._hist_retry_times -= 1
                     return CONTINUE
                 else:
                     self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
@@ -771,7 +784,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             else:
                 # try to fetch the data again
                 if self._live_retry_times is None:
-                    self._live_retry_times = self.p.live_retry_times
+                    self._live_retry_times = self.p.data_retry_times
 
                 if self._live_retry_times > 0:
                     self._live_retry_times -= 1
@@ -802,6 +815,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
         self.ib.set_losing_data(False)
         self._check_and_reset_live_historical_data_retry()
+        self._hist_retry_times = None
 
         if msg.date is not None:
             if self._timeframe == bt.TimeFrame.Ticks:
@@ -1026,6 +1040,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 self._lose_connection = True
                 if self._lose_connection_time is None:
                     self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
+                    self.logger.info(f"Receive connection error {msg.errorCode}, set lose connection time to {self._lose_connection_time} {self._name}")
                 self.logger.info(f"Receive connection error {msg.errorCode}, set the connection to False {self._name}")
             else:
                 self.logger.info(f"Receive error message: {msg.errorCode} {msg.errorMsg} {self._name} pass throuhg")
