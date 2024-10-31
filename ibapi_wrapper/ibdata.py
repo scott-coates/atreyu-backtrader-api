@@ -761,6 +761,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
                     if self._hist_retry_times < 0:
                         self._hist_retry_times = None
+                        self.qhist.put(None)
                         return None
 
                     # fetch the data again
