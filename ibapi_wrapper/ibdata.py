@@ -855,11 +855,14 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         return True
 
     def _load(self):
-        self._process_errors()
+        operation, result = self._process_errors()
+        if operation is True:
+            return result
 
         if self._lose_connection:
-            self.logger.info(f"Fetch data lose connection, {self._name}, todate is {self.p.todate} sleep for {self.p.qcheck}")
-            time.sleep(self.p.qcheck)
+            sleep_time = self.p.qcheck if self.p.qcheck <= 60 else 60
+            self.logger.info(f"Fetch data lose connection, {self._name}, todate is {self.p.todate} sleep for {sleep_time} qcheck is {self.p.qcheck}")
+            time.sleep(sleep_time)
             return None
 
         if self.contract is None or self._state == self._ST_OVER:
@@ -1032,6 +1035,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         if self.qerror.empty():
             return
 
+        need_operation = False
+        result = None
         while not self.qerror.empty():
             msg = self.qerror.get()
 
@@ -1044,24 +1049,37 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
                     self.logger.info(f"Receive connection error {msg.errorCode}, set lose connection time to {self._lose_connection_time} {self._name}")
                 self.logger.info(f"Receive connection error {msg.errorCode}, set the connection to False {self._name}")
+                need_operation = True
+                result = None
             else:
                 self.logger.info(f"Receive error message: {msg.errorCode} {msg.errorMsg} {self._name} pass throuhg")
                 pass
+
+        return need_operation, result
+
+    def _clear_lose_connection_msg(self):
+        if self.qerror.empty():
+            return
+
+        new_queue = queue.Queue()
+        while not self.qerror.empty():
+            msg = self.qerror.get()
+            if msg in [502, 504, 1102, 1101, 10225]:
+                continue
+            new_queue.put(msg)
+        self.qerror = new_queue
 
     def push_error(self, msg):
         self.logger.info(f"Push error message: {msg} {self._name}")
         if msg == "reconnected":
             self._lose_connection = False
             self.put_notification(self.CONNECTED)
-            if self.p.historical:
-                if not self._historical_ended:
-                    self._state = self._ST_START
-            else:
-                self._state = self._ST_START
+            self._state = self._ST_START
             self.qhist = None
             self.qlive = None
             self._subcription_valid = False
             self._storedmsg = dict()
+            self._clear_lose_connection_msg()
             self.logger.info(f"Receive reconnected message, set the connection to {self._lose_connection} {self._name}")
         elif msg == "reconnect_finished":
             if self._state == self._ST_START:
