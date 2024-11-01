@@ -1032,11 +1032,12 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         return True
 
     def _process_errors(self):
-        if self.qerror.empty():
-            return
-
         need_operation = False
         result = None
+
+        if self.qerror.empty():
+            return need_operation, result
+
         while not self.qerror.empty():
             msg = self.qerror.get()
 
