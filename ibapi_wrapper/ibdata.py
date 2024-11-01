@@ -768,9 +768,9 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                     sleep_time = self._fix_fetch_todate()
                     self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
                     time.sleep(sleep_time)
-                    self._st_start()
                     self._historical_get_data = False
                     self._historical_get_date_time = None
+                    self._state = self._ST_START
 
                     if self._hist_retry_times is not None:
                         self.logger.info(f"Error {msg} in {self._name} and Retry times {self._hist_retry_times}")
@@ -790,12 +790,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
                 if self._live_retry_times > 0:
                     self._live_retry_times -= 1
-                    self._statelivereconn = self.p.backfill
+                    self._state = self._ST_START
                     self.logger.info(f"Try again to fetch live data({self._name}), qcheck is {self._qcheck}, retry times {self._live_retry_times}")
                     time.sleep(self._qcheck)
                 else:
                     self.logger.info(f"Fetch live historical data({self._name}) failed, ignore the data")
                     self._statelivereconn = False
+                    self._state = self._ST_LIVE
                 return CONTINUE
 
         elif msg == -354:  # Data not subscribed
