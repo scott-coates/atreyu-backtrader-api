@@ -627,12 +627,14 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         if msg == -354:
             self.ib.set_losing_data(True)
             self.put_notification(self.NOTSUBSCRIBED)
+            self.logger.info(f"Receive NOTSUBSCRIBED Msg, qcheck is {self._qcheck} {self._name}")
             return False
 
         elif isinstance(msg, integer_types):
             # Unexpected notification for historical data skip it
             # May be a "not connected not yet processed"
             self.put_notification(self.UNKNOWN, msg)
+            self.logger.info(f"Receive unknown error msg {msg} {self._name}")
             return CONTINUE
 
         self.ib.set_losing_data(False)
