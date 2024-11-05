@@ -1056,8 +1056,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 need_operation = True
                 result = None
             else:
-                self.logger.info(f"Receive error message: {msg.errorCode} {msg.errorMsg} {self._name} pass throuhg")
-                pass
+                self.logger.info(f"Receive error message: {msg.errorCode} {self._name} pass throuhg")
 
         return need_operation, result
 
