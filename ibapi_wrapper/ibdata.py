@@ -790,7 +790,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 if self._live_retry_times is None:
                     self._live_retry_times = self.p.data_retry_times
 
-                if self._live_retry_times > 0:
+                if self._live_retry_times >= 0:
                     self._live_retry_times -= 1
                     self._state = self._ST_START
                     self.logger.info(f"Try again to fetch live data({self._name}), qcheck is {self._qcheck}, retry times {self._live_retry_times}")
