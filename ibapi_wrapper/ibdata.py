@@ -269,6 +269,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         ('use_date_split', False),  # split date when date range exceeds max duration
         ('ignore_incomplete', False),  # ignore incomplete data
         ('ignore_fetcherror', False),  # ignore fetch error
+        ('data_retry_times', 3),       # when fetch backfill data failed, retry maximinum times
     )
 
     _store = ibstore.IBStore
@@ -328,6 +329,17 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         self.init_logger()
         self.init_trade_hours_data()
         self._retry_fetch_method = None
+        self._lose_connection = False
+        self._lose_connection_time = None
+        self._live_retry_times = None
+        self._hist_retry_times = None
+
+    def skip_data(self):
+        if self._lose_connection:
+            self.logger.info(f"Skip {self._name} data because of losing connection")
+            return True
+        else:
+            return False
 
     def init_trade_hours_data(self):
         self._liquid_hours = {}
@@ -545,6 +557,15 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         qwait = max(0.0, qwait - qlapse)
         self._qcheck = qwait
 
+    def _check_and_reset_live_historical_data_retry(self):
+        if self.p.historical:
+            return
+
+        if self._live_retry_times is not None:
+            self._live_retry_times = None
+            self._statelivereconn = False
+            self.logger.info(f"data({self._name}) fetch live historical data success, reset the retry times")
+
     def _fix_fetch_todate(self):
         local_timezone = tzlocal.get_localzone_name()
         local_dt = pytz.timezone(local_timezone).localize(datetime.datetime.now())
@@ -557,7 +578,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # if that, we will lose market data
             # so when there is a minute or second data error, just wait the market open
             # sleep one minute and move the end data
-            self.p.todate += datetime.timedelta(minutes=1)
+            if self._lose_connection_time:
+                lose_delta = local_dt - self._lose_connection_time
+                self._lose_connection_time = None
+                self.logger.info(f"Fix the fetch todate in disconnection, todate is {self.p.todate} lose delta is {lose_delta}")
+                self.p.todate += lose_delta
+            else:
+                self.p.todate += datetime.timedelta(minutes=1)
             sleep = 60
             if self.p.todate.tzinfo is None:
                 self.p.todate = self._gettz().localize(self.p.todate)
@@ -600,12 +627,14 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         if msg == -354:
             self.ib.set_losing_data(True)
             self.put_notification(self.NOTSUBSCRIBED)
+            self.logger.info(f"Receive NOTSUBSCRIBED Msg, qcheck is {self._qcheck} {self._name}")
             return False
 
         elif isinstance(msg, integer_types):
             # Unexpected notification for historical data skip it
             # May be a "not connected not yet processed"
             self.put_notification(self.UNKNOWN, msg)
+            self.logger.info(f"Receive unknown error msg {msg} {self._name}")
             return CONTINUE
 
         self.ib.set_losing_data(False)
@@ -687,17 +716,19 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         except queue.Empty:
             if self.p.historical:  # only historical
                 if self._historical_get_date_time is None:
-                    self.logger.warning("We didn't get historical data, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
+                    self.logger.warning(f"We didn't get historical data {self._name}, consider to set the self.p.qcheck from {self._qcheck} to 0.0 to accelerate the process.")
                     self._historical_get_date_time = datetime.datetime.now()
 
                 if datetime.datetime.now() - self._historical_get_date_time > datetime.timedelta(seconds=60):
-                    self.logger.warning("We didn't get historical data for 60 seconds, consider to set the self.p.qcheck to 0.0 to accelerate the process.")
+                    self.logger.warning(f"We didn't get historical data {self._name} for 60 seconds, consider to set the self.p.qcheck from {self._qcheck} to 0.0 to accelerate the process.")
                     self._historical_get_date_time = datetime.datetime.now()
                 # self.put_notification(self.DISCONNECTED)
+                self._hist_retry_times = None
                 return None  # end of historical
 
             # Live is also wished - go for it
             self._state = self._ST_LIVE
+            self._check_and_reset_live_historical_data_retry()
             return CONTINUE
 
         self._historical_get_data = True
@@ -710,10 +741,12 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # check the live mode
             if self.p.historical:
                 self.put_notification(self.DISCONNECTED)
+                self._hist_retry_times = None
                 return False
             else:
                 # return back to Live mode
                 self._state = self._ST_LIVE
+                self._check_and_reset_live_historical_data_retry()
                 return CONTINUE
 
         elif msg == "WaitSplit":
@@ -723,27 +756,49 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             return CONTINUE
 
         elif msg in [162, 320, 321, 322]:
-            if not self.p.ignore_fetcherror:
-                # fetch the data again
-                sleep_time = self._fix_fetch_todate()
-                self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
-                time.sleep(sleep_time)
-                self._st_start()
-                self._historical_get_data = False
-                self._historical_get_date_time = None
-                return CONTINUE
-
-            self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
-            # stop data
-            self._subcription_valid = False
-            self._historical_ended = True
-            # check the live mode
             if self.p.historical:
-                self.put_notification(self.DISCONNECTED)
-                return False
+                if not self.p.ignore_fetcherror:
+                    if self._hist_retry_times is None:
+                        self._hist_retry_times = self.p.data_retry_times
+
+                    if self._hist_retry_times < 0:
+                        self._hist_retry_times = None
+                        self.qhist.put(None)
+                        return None
+
+                    # fetch the data again
+                    sleep_time = self._fix_fetch_todate()
+                    self.logger.info(f"Try again to fetch historical data, qcheck is {self._qcheck}, to date is {self.p.todate} timeframe {self._timeframe} {self._retry_fetch_method} sleep {sleep_time}") 
+                    time.sleep(sleep_time)
+                    self._historical_get_data = False
+                    self._historical_get_date_time = None
+                    self._state = self._ST_START
+
+                    if self._hist_retry_times is not None:
+                        self.logger.info(f"Error {msg} in {self._name} and Retry times {self._hist_retry_times}")
+                        self._hist_retry_times -= 1
+                    return CONTINUE
+                else:
+                    self.logger.info(f"Stop fetching historical data, qcheck is {self._qcheck}")
+                    # stop data
+                    self._subcription_valid = False
+                    self._historical_ended = True
+                    self.put_notification(self.DISCONNECTED)
+                    return False
             else:
-                # return back to Live mode
-                self._state = self._ST_LIVE
+                # try to fetch the data again
+                if self._live_retry_times is None:
+                    self._live_retry_times = self.p.data_retry_times
+
+                if self._live_retry_times >= 0:
+                    self._live_retry_times -= 1
+                    self._state = self._ST_START
+                    self.logger.info(f"Try again to fetch live data({self._name}), qcheck is {self._qcheck}, retry times {self._live_retry_times}")
+                    time.sleep(self._qcheck)
+                else:
+                    self.logger.info(f"Fetch live historical data({self._name}) failed, ignore the data")
+                    self._statelivereconn = False
+                    self._state = self._ST_LIVE
                 return CONTINUE
 
         elif msg == -354:  # Data not subscribed
@@ -760,9 +815,12 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             # Unexpected notification for historical data skip it
             # May be a "not connected not yet processed"
             self.put_notification(self.UNKNOWN, msg)
+            self.logger.info(f"Receive unknown error msg {msg}")
             return CONTINUE
 
         self.ib.set_losing_data(False)
+        self._check_and_reset_live_historical_data_retry()
+        self._hist_retry_times = None
 
         if msg.date is not None:
             if self._timeframe == bt.TimeFrame.Ticks:
@@ -800,7 +858,15 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         return True
 
     def _load(self):
-        self._process_errors()
+        operation, result = self._process_errors()
+        if operation is True:
+            return result
+
+        if self._lose_connection:
+            sleep_time = self.p.qcheck if self.p.qcheck <= 60 else 60
+            self.logger.info(f"Fetch data lose connection, {self._name}, todate is {self.p.todate} sleep for {sleep_time} qcheck is {self.p.qcheck}")
+            time.sleep(sleep_time)
+            return None
 
         if self.contract is None or self._state == self._ST_OVER:
             return False  # nothing can be done
@@ -815,6 +881,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             elif self._state == self._ST_START:
                 if not self._st_start():
                     return False
+                else:
+                    result = CONTINUE
 
             if result == CONTINUE:
                 continue
@@ -967,8 +1035,11 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         return True
 
     def _process_errors(self):
+        need_operation = False
+        result = None
+
         if self.qerror.empty():
-            return
+            return need_operation, result
 
         while not self.qerror.empty():
             msg = self.qerror.get()
@@ -977,11 +1048,48 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 self._subcription_valid = False
                 self.put_notification(self.CONNBROKEN)
                 self._statelivereconn = self.p.backfill
+                self._lose_connection = True
+                if self._lose_connection_time is None:
+                    self._lose_connection_time = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
+                    self.logger.info(f"Receive connection error {msg.errorCode}, set lose connection time to {self._lose_connection_time} {self._name}")
+                self.logger.info(f"Receive connection error {msg.errorCode}, set the connection to False {self._name}")
+                need_operation = True
+                result = None
             else:
-                pass
+                self.logger.info(f"Receive error message: {msg.errorCode} {self._name} pass throuhg")
+
+        return need_operation, result
+
+    def _clear_lose_connection_msg(self):
+        if self.qerror.empty():
+            return
+
+        new_queue = queue.Queue()
+        while not self.qerror.empty():
+            msg = self.qerror.get()
+            if msg in [502, 504, 1102, 1101, 10225]:
+                continue
+            new_queue.put(msg)
+        self.qerror = new_queue
 
     def push_error(self, msg):
-        self.qerror.put(msg)
+        self.logger.info(f"Push error message: {msg} {self._name}")
+        if msg == "reconnected":
+            self._lose_connection = False
+            self.put_notification(self.CONNECTED)
+            self._state = self._ST_START
+            self.qhist = None
+            self.qlive = None
+            self._subcription_valid = False
+            self._storedmsg = dict()
+            self._clear_lose_connection_msg()
+            self.logger.info(f"Receive reconnected message, set the connection to {self._lose_connection} {self._name}")
+        elif msg == "reconnect_finished":
+            if self._state == self._ST_START:
+                self._st_start()
+                self.logger.info(f"Receive reconnect finished message, start the data {self._name}")
+        else:
+            self.qerror.put(msg)
 
     def _parse_trading_hours(self, hours_str):
         sessions = {}

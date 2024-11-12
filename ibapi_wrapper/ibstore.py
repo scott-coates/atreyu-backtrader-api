@@ -1164,7 +1164,13 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             except KeyError:
                 store_logger.warn(f"Cancel data queue for {msg.reqId} failed. Cannot find the queue")
             else:
+                store_logger.info(f"Put error code and cancel data queue for {msg.reqId} to avoid memory leak")
                 q.put(msg.errorCode)
+                self.cancelQueue(q)
+
+        elif msg.errorCode == 165:  #  Historical Market Data Service query message:HMDS server connection was successful.
+            # do nothing
+            pass
 
         elif msg.errorCode in [200, 203]:
             # cdetails 200 security not found, notify over right queue
@@ -2294,6 +2300,11 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         self.apiThread = threading.Thread(target=self.conn.run, name="reconnect_ibapi_run", daemon=True)
         self.apiThread.start()
 
+        # tell all datas the connection is reconnected
+        for data in self.datas:
+            if data is not None:
+                data.push_error("reconnected")
+
         # cancel all queue
         for q in self.ts:  # key: queue -> ticker
             q.put(None)
@@ -2314,3 +2325,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # start data request again
         # the old threads will exit later
         self.startdatas()
+
+        # tell all datas connection has been reseted
+        for data in self.datas:
+            if data is not None:
+                data.push_error("reconnect_finished")
