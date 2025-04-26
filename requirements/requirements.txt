@@ -1,2 +1,4 @@
 backtrader==1.9.76.123
 exchange-calendars==3.4
+pytz==2025.2
+tzlocal==5.3.1
