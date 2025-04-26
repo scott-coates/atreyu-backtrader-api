@@ -104,7 +104,7 @@ class OrderStatusMsg(object):
     def __str__(self):
         return f'{self.vars}'
 
-
+# https://interactivebrokers.github.io/tws-api/tick_types.html
 class TickFieldEnum(Enum):
     '''Enum for tick fields
     '''
@@ -213,7 +213,7 @@ class RTTickData(object):
             self.value = value
             self.additional = additional
             self.datetime = pytz.timezone(tzlocal.get_localzone_name()).localize(datetime.datetime.now())
-            self.valid = True
+            self.valid = value != -1.0
         except ValueError:
             store_logger.error(f"Unknown tick field: {field}")
             self.valid = False
