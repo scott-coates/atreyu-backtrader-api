@@ -964,7 +964,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         return True
 
     def _load_rtdata(self, rtdata):
-        if rtdata.is_valid is False:
+        if not rtdata.is_valid():
             return False
 
         dt = date2num(rtdata.datetime)
