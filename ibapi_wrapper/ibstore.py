@@ -517,7 +517,7 @@ class IBApi(EWrapper, EClient):
         self.cb.commissionReport(commissionReport)
 
     @logibmsg
-    def error(self, reqId, errorTime, errorCode, errorString, advancedOrderRejectJson = ""):
+    def error(self, reqId, errorCode, errorString, advancedOrderRejectJson = ""):
         self.cb.error(ErrorMsg(reqId, errorCode, errorString, advancedOrderRejectJson))
 
     @logibmsg
