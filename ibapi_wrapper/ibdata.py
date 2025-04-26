@@ -280,6 +280,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
     # States for the Finite State Machine in _load
     _ST_FROM, _ST_START, _ST_LIVE, _ST_HISTORBACK, _ST_OVER = range(5)
 
+    lines = ('bid', 'ask', 'bidsize', 'asksize',)  # Add these to existing lines
+
     def _timeoffset(self):
         return self.ib.timeoffset()
 
@@ -973,41 +975,50 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
         self.lines.datetime[0] = dt
 
-        # get the data type, only use the high, low, close, volume now
+        # Initialize all fields with previous values or defaults
+        if len(self) > 1:
+            self.lines.open[0] = self.lines.open[-1]
+            self.lines.high[0] = self.lines.high[-1]
+            self.lines.low[0] = self.lines.low[-1]
+            self.lines.close[0] = self.lines.close[-1]
+            self.lines.volume[0] = self.lines.volume[-1]
+            self.lines.openinterest[0] = self.lines.openinterest[-1]
+            self.lines.bid[0] = self.lines.bid[-1]
+            self.lines.ask[0] = self.lines.ask[-1]
+            self.lines.bidsize[0] = self.lines.bidsize[-1]
+            self.lines.asksize[0] = self.lines.asksize[-1]
+        else:
+            # First tick initialization
+            self.lines.open[0] = float('nan')
+            self.lines.high[0] = float('nan')
+            self.lines.low[0] = float('nan')
+            self.lines.close[0] = float('nan')
+            self.lines.volume[0] = float('nan')
+            self.lines.openinterest[0] = float('nan')
+            self.lines.bid[0] = float('nan')
+            self.lines.ask[0] = float('nan')
+            self.lines.bidsize[0] = float('nan')
+            self.lines.asksize[0] = float('nan')
+
+        # Update the specific field
         if rtdata.field == 'LAST_PRICE':
             self.lines.close[0] = rtdata.value
-
-            self.lines.open[0] = float('-inf')
-            self.lines.high[0] = float('-inf')
-            self.lines.low[0] = float('-inf')
-            self.lines.volume[0] = float('-inf')
-            self.lines.openinterest[0] = float('-inf')
         elif rtdata.field == 'HIGH':
             self.lines.high[0] = rtdata.value
-
-            self.lines.close[0] = float('-inf')
-            self.lines.open[0] = float('-inf')
-            self.lines.low[0] = float('-inf')
-            self.lines.volume[0] = float('-inf')
-            self.lines.openinterest[0] = float('-inf')
         elif rtdata.field == 'LOW':
             self.lines.low[0] = rtdata.value
-
-            self.lines.close[0] = float('-inf')
-            self.lines.open[0] = float('-inf')
-            self.lines.high[0] = float('-inf')
-            self.lines.volume[0] = float('-inf')
-            self.lines.openinterest[0] = float('-inf')
-
         elif rtdata.field == 'VOLUME':
             self.lines.volume[0] = rtdata.value
-
-            self.lines.close[0] = float('-inf')
-            self.lines.open[0] = float('-inf')
-            self.lines.high[0] = float('-inf')
-            self.lines.low[0] = float('-inf')
-            self.lines.openinterest[0] = float('-inf')
-
+        elif rtdata.field == 'OPEN_INTEREST':
+            self.lines.openinterest[0] = rtdata.value
+        elif rtdata.field == 'BID_PRICE':
+            self.lines.bid[0] = rtdata.value
+        elif rtdata.field == 'ASK_PRICE':
+            self.lines.ask[0] = rtdata.value
+        elif rtdata.field == 'BID_SIZE':
+            self.lines.bidsize[0] = rtdata.value
+        elif rtdata.field == 'ASK_SIZE':
+            self.lines.asksize[0] = rtdata.value
         else:
             return False
 
@@ -1024,10 +1035,10 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         if tick.dataType == 'RT_TICK_MIDPOINT':
             self.lines.close[0] = tick.midPoint
         elif tick.dataType == 'RT_TICK_BID_ASK':
-            self.lines.open[0] = tick.bidPrice
-            self.lines.close[0] = tick.askPrice
-            self.lines.volume[0] = tick.bidSize
-            self.lines.openinterest[0] = tick.askSize
+            self.lines.bid[0] = tick.bidPrice
+            self.lines.ask[0] = tick.askPrice
+            self.lines.bidsize[0] = tick.bidSize
+            self.lines.asksize[0] = tick.askSize
         elif tick.dataType == 'RT_TICK_LAST':
             self.lines.close[0] = tick.price
             self.lines.volume[0] = tick.size
