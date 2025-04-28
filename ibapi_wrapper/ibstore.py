@@ -2026,7 +2026,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
 
     def openOrderEnd(self):
         '''Receive the event ``openOrderEnd`` events'''
-        self.broker.push_openorder()
+        if self.broker:
+            self.broker.push_openorder()
 
     def reqCompletedOrders(self):
         self.conn.reqCompletedOrders(True)
