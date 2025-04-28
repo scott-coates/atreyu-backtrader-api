@@ -28,6 +28,7 @@ from backtrader.utils.py3 import (integer_types, queue, string_types,
                                   with_metaclass)
 from backtrader.metabase import MetaParams
 from ibapi_wrapper import ibstore
+from ibapi_wrapper.ibstore import TickFieldEnum
 import datetime
 import pytz
 import time
@@ -1001,23 +1002,23 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             self.lines.asksize[0] = float('nan')
 
         # Update the specific field
-        if rtdata.field == 'LAST_PRICE':
+        if rtdata.field in {TickFieldEnum.CLOSE.name, TickFieldEnum.DELAYED_CLOSE.name} :
             self.lines.close[0] = rtdata.value
-        elif rtdata.field == 'HIGH':
+        elif rtdata.field in {TickFieldEnum.HIGH.name, TickFieldEnum.DELAYED_HIGH.name}:
             self.lines.high[0] = rtdata.value
-        elif rtdata.field == 'LOW':
+        elif rtdata.field in {TickFieldEnum.LOW.name, TickFieldEnum.DELAYED_LOW.name}:
             self.lines.low[0] = rtdata.value
-        elif rtdata.field == 'VOLUME':
+        elif rtdata.field in {TickFieldEnum.VOLUME.name, TickFieldEnum.DELAYED_VOLUME.name}:
             self.lines.volume[0] = rtdata.value
-        elif rtdata.field == 'OPEN_INTEREST':
+        elif rtdata.field in {TickFieldEnum.OPEN_INTEREST.name}:
             self.lines.openinterest[0] = rtdata.value
-        elif rtdata.field == 'BID_PRICE':
+        elif rtdata.field in {TickFieldEnum.BID_PRICE.name, TickFieldEnum.DELAYED_BID.name}:
             self.lines.bid[0] = rtdata.value
-        elif rtdata.field == 'ASK_PRICE':
+        elif rtdata.field in {TickFieldEnum.ASK_PRICE.name, TickFieldEnum.DELAYED_ASK.name}:
             self.lines.ask[0] = rtdata.value
-        elif rtdata.field == 'BID_SIZE':
+        elif rtdata.field in {TickFieldEnum.BID_SIZE.name, TickFieldEnum.DELAYED_BID_SIZE.name}:
             self.lines.bidsize[0] = rtdata.value
-        elif rtdata.field == 'ASK_SIZE':
+        elif rtdata.field in {TickFieldEnum.ASK_SIZE.name, TickFieldEnum.DELAYED_ASK_SIZE.name}:
             self.lines.asksize[0] = rtdata.value
         else:
             return False
