@@ -171,13 +171,16 @@ class IBOrder(OrderBase, ibapi.order.Order):
                 self.m_trailingPercent = self.trailpercent * 100.0
         elif self.exectype == self.StopTrailLimit:
             self.m_trailStopPrice = self.lmtPrice = self.price
+            self.trailStopPrice = self.m_trailStopPrice
             # The limit offset is set relative to the price difference in TWS
             self.lmtPrice = self.pricelimit
+            # self.lmtPriceOffset = 0
             if self.trailamount is not None:
                 self.auxPrice = self.trailamount
             elif self.trailpercent is not None:
                 # value expected in % format ... multiply 100.0
                 self.m_trailingPercent = self.trailpercent * 100.0
+                self.trailingPercent = self.m_trailingPercent
 
         self.totalQuantity = abs(self.size)  # ib takes only positives
         tz = self.data._gettz()
@@ -215,6 +218,10 @@ class IBOrder(OrderBase, ibapi.order.Order):
 
         self.create_time = time.time()
         self.update_time = time.time()
+        # https://stackoverflow.com/questions/74943249/python-program-that-buys-options-using-ibkr
+        # https://groups.io/g/twsapi/topic/the_etradeonly_order/82377975
+        self.eTradeOnly = False
+        self.firmQuoteOnly = False
 
     def get_contract(self):
         return self.contract
@@ -874,10 +881,10 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             os.makedirs(self.save_completed_path)
         order_id = order.orderId
         save_data = {
-            "order_id": order.orderId,
+            "order_id": order_id,
             "client_id": order.clientId,
-            "dataname": order.data.getname(),
-            "stratname": order.owner.getname(),
+            "dataname": order.data._name,
+            "stratname": order.owner.__class__.__name__,
             "size": order.totalQuantity,
             "price": order.lmtPrice,
             "pricelimit": order.auxPrice,
@@ -898,7 +905,8 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             "exchange": order.contract.exchange,
             "create_time": order.create_time,
             "update_time": order.update_time,
-            "uuid": order.uuid,
+            # "uuid": order.uuid,
+            "uuid": order_id,
         }
         filename = f"{order.contract.symbol}_{order.clientId}_{order_id}.json"
         save_path = os.path.join(self.save_path, filename)
