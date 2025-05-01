@@ -170,11 +170,10 @@ class IBOrder(OrderBase, ibapi.order.Order):
                 # value expected in % format ... multiply 100.0
                 self.m_trailingPercent = self.trailpercent * 100.0
         elif self.exectype == self.StopTrailLimit:
-            self.m_trailStopPrice = self.lmtPrice = self.price
-            self.trailStopPrice = self.m_trailStopPrice
+            self.trailStopPrice = self.price
             # The limit offset is set relative to the price difference in TWS
-            self.lmtPrice = self.pricelimit
-            # self.lmtPriceOffset = 0
+            # this is the only way i could get limit offset and limit to work together in sync
+            self.lmtPriceOffset = self._limitoffset if self._limitoffset > 0 else - self._limitoffset
             if self.trailamount is not None:
                 self.auxPrice = self.trailamount
             elif self.trailpercent is not None:
