@@ -171,9 +171,11 @@ class IBOrder(OrderBase, ibapi.order.Order):
                 self.m_trailingPercent = self.trailpercent * 100.0
         elif self.exectype == self.StopTrailLimit:
             self.trailStopPrice = self.price
-            # The limit offset is set relative to the price difference in TWS
             # this is the only way i could get limit offset and limit to work together in sync
-            self.lmtPriceOffset = self._limitoffset if self._limitoffset > 0 else - self._limitoffset
+            # https://groups.io/g/twsapi/topic/trail_limit_orders/34461744
+            # https://interactivebrokers.github.io/tws-api/basic_orders.html#trailingstoplimit
+            # Important: the 'limit offset' field is set by default in the TWS/IBG settings in v963+. This setting either needs to be changed in the Order Presets, the default value accepted, or the limit price offset sent from the API as in the example below. Not both the 'limit price' and 'limit price offset' fields can be set in TRAIL LIMIT orders.
+            self.lmtPriceOffset = abs(self._limitoffset)
             if self.trailamount is not None:
                 self.auxPrice = self.trailamount
             elif self.trailpercent is not None:
@@ -745,9 +747,8 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 # Use the actual time provided by the execution object
                 # The report from TWS is in actual local time, not the data's tz
                 #dt = date2num(datetime.strptime(ex.time, '%Y%m%d  %H:%M:%S'))
-                dt_array = [] if ex.time == None else ex.time.split(" ")
+                dt_array = [] if ex.time == None else list(filter(bool,ex.time.split(" ")))
                 if dt_array and len(dt_array) > 1:
-                  dt_array.pop()
                   ex_time = " ".join(dt_array)
                   dt = date2num(datetime.datetime.strptime(ex_time, '%Y%m%d %H:%M:%S'))
                 else:
