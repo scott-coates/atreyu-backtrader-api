@@ -600,8 +600,12 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
     def rebuild_order(self, order_data):
         dataname = order_data["dataname"]
         stratname = order_data["stratname"]
-        data = self.cerebro.getdatabyname(dataname)
-        owner = self.cerebro.getstratbyname(stratname)
+        data = self.cerebro.datasbyname[dataname]
+        # flat_strats = list(itertools.chain.from_iterable(self.cerebro.strats))
+        # strats_by_name =  {k[0].__name__:k for k in flat_strats}
+        # owner = strats_by_name[stratname][0] # the strats tuple is (class, empty, params)
+        strats_by_name =  {k.__class__.__name__:k for k in self.cerebro.runningstrats}
+        owner = strats_by_name[stratname]
         size = order_data["size"]
         price = order_data["price"]
         pricelimit = order_data["pricelimit"]
