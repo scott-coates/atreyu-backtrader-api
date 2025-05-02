@@ -927,6 +927,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
 
         # ibpy connection object
         self.conn = IBApi(self, self._debug)
+        self.conn.connect(self.p.host, self.p.port, self.clientId)
         while not self.connected():
             self.conn.connect(self.p.host, self.p.port, self.clientId)
             store_logger.info("Connect failed retrying after 5 seconds.....")
