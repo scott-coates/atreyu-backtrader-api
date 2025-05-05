@@ -305,7 +305,8 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         self.startingcash = self.cash = 0.0
         self.startingvalue = self.value = 0.0
 
-        self._lock_orders = threading.Lock()  # control access
+        # see push_ordererror - why rlock is needed
+        self._lock_orders = threading.RLock()  # control access
         self.orderbyid = dict()  # orders by order id
         self.loaded_orders = dict()  # orders loaded from file
         self.received_orders = queue.Queue()  # orders received from broker
@@ -790,6 +791,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 order = self.orderbyid[oid]
                 self.notify(order)
 
+    # this line causes deadlock - if self.request_broker_orders is called within our lock, it'll hang
     def push_ordererror(self, msg):
         with self._lock_orders:
             try:
