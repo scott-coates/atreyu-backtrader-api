@@ -928,16 +928,11 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # ibpy connection object
         self.conn = IBApi(self, self._debug)
         self.conn.connect(self.p.host, self.p.port, self.clientId)
-        # time.sleep(5) 
         while not self.connected():
             self.conn.connect(self.p.host, self.p.port, self.clientId)
             store_logger.info("Connect failed retrying after 5 seconds.....")
             time.sleep(5)
-        # give time before starting new thread
-        # if not done, the new thread starts and immediately receives messages, meanwhile this class IBstore hasn't had time to setup its own depdenencies e.g. self.broker is None
-        self.apiThread = threading.Timer(5, self.conn.run)
-        self.apiThread.daemon = True
-        self.apiThread.name= "ibapi_run"
+        self.apiThread = threading.Thread(target=self.conn.run, name="ibapi_run", daemon=True)
         self.apiThread.start()
 
     def set_logger_level(self):
@@ -952,7 +947,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
     def start(self, data=None, broker=None):
         store_logger.info(f"IBStore start, data: {data} broker: {broker}")
         while not self.reconnect(fromstart=True):  # reconnect should be an invariant
-            print("Connect failed retrying after 5 seconds.....")
+            store_logger.warning("Connect failed retrying after 5 seconds.....")
             time.sleep(5)
 
         # Datas require some processing to kickstart data reception
