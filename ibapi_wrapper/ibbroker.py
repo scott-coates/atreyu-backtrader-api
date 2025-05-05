@@ -594,7 +594,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             if msg.filled:
                 self.ordstatus[msg.orderId][msg.filled] = msg
         else:  # Unknown status ...
-            print(f"Unknown status,  orderId: {msg.orderId}, order status: {msg.status}")
+            self.logger.warning(f"Unknown status,  orderId: {msg.orderId}, order status: {msg.status}")
             pass
 
     def rebuild_order(self, order_data):

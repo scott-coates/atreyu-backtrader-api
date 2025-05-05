@@ -1145,7 +1145,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
 
         if msg.reqId == -1:
             if msg.errorCode == 502:
-                print(msg.errorString)
+                store_logger.warning(msg.errorString)
             elif msg.errorCode in [2104, 2107, 2106, 2158]:
                 store_logger.info(f"{msg.errorString}")
             elif msg.errorCode == 2105:
@@ -2048,7 +2048,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
     
     def orderStatus(self, msg):
         '''Receive the event ``orderStatus``'''
-        print(f"Receive order status, msg.orderId: {msg.orderId}, msg.status: {msg.status}")
+        store_logger.info(f"Receive order status, msg.orderId: {msg.orderId}, msg.status: {msg.status}")
         self.broker.push_orderstatus(msg)
     
     def commissionReport(self, commissionReport):
