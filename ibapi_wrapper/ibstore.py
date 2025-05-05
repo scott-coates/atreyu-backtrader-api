@@ -935,9 +935,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # give time before starting new thread
         # if not done, the new thread starts and immediately receives messages, meanwhile this class IBstore hasn't had time to setup its own depdenencies e.g. self.broker is None
         # cerebro.run will setup store <-> broker deps but it needs time to run
-        self.apiThread = threading.Timer(1, self.conn.run)
-        self.apiThread.daemon = True
-        self.apiThread.name = "ibapi_run_thread"
+        # todo - place this somewhere after the start method is called - and once data and broker are ready, then this should be invoked, otherwise there will be race conditions, and caller will need to pre-assign the broker to the store first
+        self.apiThread = threading.Thread(target=self.conn.run, name="ibapi_run_thread", daemon=True)
         self.apiThread.start()
 
     def set_logger_level(self):
