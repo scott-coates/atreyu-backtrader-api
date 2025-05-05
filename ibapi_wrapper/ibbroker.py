@@ -26,6 +26,7 @@ from copy import copy
 import datetime
 import threading
 import uuid
+import ibapi.contract
 import pytz
 import os
 import json
@@ -626,6 +627,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         update_time = order_data["update_time"]
         uuid = order_data["uuid"]
         ocaGroup = order_data["ocaGroup"]
+        contract = order_data["contract"]
 
         if data is None:
             self.logger.warning(f"We cannot find dataname {dataname} in cerebro, {order_id} {action} {ibstatus}, maybe changed the data config")
@@ -649,6 +651,27 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         ib_order.update_time = update_time
         ib_order.uuid = uuid
         ib_order.ocaGroup = ocaGroup
+        
+        rebuild_contract  = ibapi.contract.Contract()
+        rebuild_contract.conId = contract["conId"]
+        rebuild_contract.symbol = contract["symbol"]
+        rebuild_contract.secType = contract["secType"]
+        rebuild_contract.lastTradeDateOrContractMonth = contract["lastTradeDateOrContractMonth"]
+        rebuild_contract.strike = contract["strike"]
+        rebuild_contract.right = contract["right"]
+        rebuild_contract.multiplier = contract["multiplier"]
+        rebuild_contract.exchange = contract["exchange"]
+        rebuild_contract.primaryExchange = contract["primaryExchange"]
+        rebuild_contract.currency = contract["currency"]
+        rebuild_contract.localSymbol = contract["localSymbol"]
+        rebuild_contract.tradingClass = contract["tradingClass"]
+        rebuild_contract.includeExpired = contract["includeExpired"]
+        rebuild_contract.secIdType = contract["secIdType"]
+        rebuild_contract.secId = contract["secId"]
+        rebuild_contract.comboLegsDescrip = contract["comboLegsDescrip"]
+        rebuild_contract.comboLegs = contract["comboLegs"]
+        rebuild_contract.deltaNeutralContract = contract["deltaNeutralContract"]
+        ib_order.contract = rebuild_contract
 
         return ib_order
 
@@ -916,7 +939,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             # "uuid": order.uuid,
             "uuid": order_id,
             "ocaGroup": order.ocaGroup,
-            # "oco": {"ocaGroup": order.ocaGroup, "orderId": order_id},
+            "contract": order.contract.__dict__, # the obj itself is not serializable
         }
         filename = f"{order.contract.symbol}_{order.clientId}_{order_id}.json"
         save_path = os.path.join(self.save_path, filename)
