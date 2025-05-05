@@ -396,7 +396,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         if order.oco is None:  # Generate a UniqueId
             order.ocaGroup = bytes(uuid.uuid4())
         else:
-            order.ocaGroup = self.orderbyid[order.oco.orderId].ocaGroup
+            order.ocaGroup = self.orderbyid[order.oco['orderId']].ocaGroup
 
         self.orderbyid[order.orderId] = order
         self.ib.placeOrder(order.orderId, order.data.tradecontract, order)
@@ -625,6 +625,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         create_time = order_data["create_time"]
         update_time = order_data["update_time"]
         uuid = order_data["uuid"]
+        ocaGroup = order_data["ocaGroup"]
 
         if data is None:
             self.logger.warning(f"We cannot find dataname {dataname} in cerebro, {order_id} {action} {ibstatus}, maybe changed the data config")
@@ -647,6 +648,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         ib_order.create_time = create_time
         ib_order.update_time = update_time
         ib_order.uuid = uuid
+        ib_order.ocaGroup = ocaGroup
 
         return ib_order
 
@@ -913,6 +915,8 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             "update_time": order.update_time,
             # "uuid": order.uuid,
             "uuid": order_id,
+            "ocaGroup": order.ocaGroup,
+            # "oco": {"ocaGroup": order.ocaGroup, "orderId": order_id},
         }
         filename = f"{order.contract.symbol}_{order.clientId}_{order_id}.json"
         save_path = os.path.join(self.save_path, filename)
