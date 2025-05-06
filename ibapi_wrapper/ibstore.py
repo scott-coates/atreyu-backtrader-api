@@ -1210,6 +1210,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
 
         elif msg.errorCode in [502, 504, 10225, 1101, 1102]:
             # Cannot connect to TWS: port, config not open, tws off (504 then)
+            # 1101 https://interactivebrokers.github.io/tws-api/message_codes.html responds with message like
+            # ibapi_wrapper.ibstore - ERROR - error: 1102 Connectivity between IBKR and Trader Workstation has been restored - data maintained. All data farms are connected: usfarm.nj; usfuture; cashfarm; usopt; usfarm; euhmds; fundfarm; ushmds; secdefnj.
             for data in self.datas:
                 if data is not None:
                     data.push_error(msg)
@@ -2308,7 +2310,9 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # tell all datas the connection is reconnected
         for data in self.datas:
             if data is not None:
-                data.push_error("reconnected")
+                # ibapi_wrapper.ibstore - ERROR - error: 1102 Connectivity between IBKR and Trader Workstation has been restored - data maintained. All data farms are connected: usfarm.nj; usfuture; cashfarm; usopt; usfarm; euhmds; fundfarm; ushmds; secdefnj.
+                # use the same "restored"
+                data.push_error("restored")
 
         # cancel all queue
         for q in self.ts:  # key: queue -> ticker
@@ -2334,4 +2338,4 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # tell all datas connection has been reseted
         for data in self.datas:
             if data is not None:
-                data.push_error("reconnect_finished")
+                data.push_error("restore_finished")

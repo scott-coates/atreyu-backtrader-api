@@ -20,6 +20,7 @@
 ###############################################################################
 from __future__ import (absolute_import, division, print_function,
                         unicode_literals)
+import re
 
 import backtrader as bt
 from backtrader.feed import DataBase
@@ -1086,7 +1087,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
     def push_error(self, msg):
         self.logger.info(f"Push error message: {msg} {self._name}")
-        if msg == "reconnected":
+        if re.search(r"restored", str(msg), re.IGNORECASE):
             self._lose_connection = False
             self.put_notification(self.CONNECTED)
             self._state = self._ST_START
@@ -1096,7 +1097,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             self._storedmsg = dict()
             self._clear_lose_connection_msg()
             self.logger.info(f"Receive reconnected message, set the connection to {self._lose_connection} {self._name}")
-        elif msg == "reconnect_finished":
+        elif re.search(r"(?=.*restore)(?=.*finished).*", str(msg), re.IGNORECASE):
             if self._state == self._ST_START:
                 self._st_start()
                 self.logger.info(f"Receive reconnect finished message, start the data {self._name}")
