@@ -607,7 +607,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         # strats_by_name =  {k[0].__name__:k for k in flat_strats}
         # owner = strats_by_name[stratname][0] # the strats tuple is (class, empty, params)
         strats_by_name =  {k.__class__.__name__:k for k in self.cerebro.runningstrats}
-        owner = strats_by_name[stratname]
+        owner = strats_by_name.get(stratname, None)
         size = order_data["size"]
         price = order_data["price"]
         pricelimit = order_data["pricelimit"]
