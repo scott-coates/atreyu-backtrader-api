@@ -351,13 +351,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
 
     def init_logger(self):
         self.logger = logging.getLogger(__name__)
-        if not self.logger.handlers:
-            stream_handler = logging.StreamHandler()
-            formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-            stream_handler.setFormatter(formatter)
-            stream_handler.setLevel(logging.INFO)
-            self.logger.addHandler(stream_handler)
-            self.logger.setLevel(logging.INFO)
+        # if not self.logger.handlers:
+        #     stream_handler = logging.StreamHandler()
+        #     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        #     stream_handler.setFormatter(formatter)
+        #     stream_handler.setLevel(logging.INFO)
+        #     self.logger.addHandler(stream_handler)
+        #     self.logger.setLevel(logging.INFO)
 
     def setenvironment(self, env):
         '''Receives an environment (cerebro) and passes it over to the store it

@@ -329,12 +329,12 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
 
     def init_logger(self):
         self.logger = logging.getLogger(__name__)
-        stream_handler = logging.StreamHandler()
-        formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-        stream_handler.setFormatter(formatter)
-        stream_handler.setLevel(logging.INFO)
-        self.logger.addHandler(stream_handler)
-        self.logger.setLevel(logging.INFO)
+        # stream_handler = logging.StreamHandler()
+        # formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+        # stream_handler.setFormatter(formatter)
+        # stream_handler.setLevel(logging.INFO)
+        # self.logger.addHandler(stream_handler)
+        # self.logger.setLevel(logging.INFO)
 
     def start(self):
         super(IBBroker, self).start()

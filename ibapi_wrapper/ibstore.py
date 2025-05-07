@@ -48,13 +48,6 @@ import tzlocal
 bytes = bstr  # py2/3 need for ibpy
 
 store_logger = logging.getLogger(__name__)
-store_stream_handler = logging.StreamHandler()
-store_formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
-store_stream_handler = logging.StreamHandler()
-store_stream_handler.setFormatter(store_formatter)
-store_stream_handler.setLevel(logging.INFO)
-store_logger.addHandler(store_stream_handler)
-store_logger.setLevel(logging.INFO)
 
 
 class ErrorMsg(object):
@@ -940,13 +933,14 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         self.apiThread.start()
 
     def set_logger_level(self):
-        handler = store_logger.handlers[0]
-        if self._debug:
-            handler.setLevel(logging.DEBUG)
-            store_logger.setLevel(logging.DEBUG)
-        else:
-            handler.setLevel(logging.INFO)
-            store_logger.setLevel(logging.INFO)
+        pass 
+        # handler = store_logger.handlers[0]
+        # if self._debug:
+        #     handler.setLevel(logging.DEBUG)
+        #     store_logger.setLevel(logging.DEBUG)
+        # else:
+        #     handler.setLevel(logging.INFO)
+        #     store_logger.setLevel(logging.INFO)
 
     def start(self, data=None, broker=None):
         store_logger.info(f"IBStore start, data: {data} broker: {broker}")
