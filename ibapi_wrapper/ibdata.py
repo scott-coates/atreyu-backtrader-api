@@ -646,7 +646,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         # Process the message according to expected return type
         if not self._statelivereconn:
             if self._laststatus != self.LIVE:
-                if self.qlive.qsize() <= 1:  # very short live queue
+                if not self.qlive or self.qlive.qsize() <= 1:  # very short live queue
                     self.put_notification(self.LIVE)
 
             if self._usertvol and self._timeframe != bt.TimeFrame.Ticks:
