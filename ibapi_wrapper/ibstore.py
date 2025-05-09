@@ -1344,7 +1344,9 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             self.iscash.pop(tickerId, None)
 
         if sendnone:
-            q.put(None)
+            # long running test crashed here - memory unsafe `q` was None
+            if q:
+                q.put(None)
     
     def validQueue(self, q):
         '''Returns (bool)  if a queue is still valid'''
