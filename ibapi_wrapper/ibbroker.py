@@ -396,6 +396,9 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         # ocoize if needed
         if order.oco is None:  # Generate a UniqueId
             order.ocaGroup = bytes(uuid.uuid4())
+        # scott - added so to handle order updates
+        elif isinstance(order.oco, str):
+            order.ocaGroup = order.oco
         else:
             order.ocaGroup = self.orderbyid[order.oco['orderId']].ocaGroup
 
@@ -421,8 +424,9 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                    size, price=None, plimit=None,
                    exectype=None, valid=None,
                    tradeid=0, **kwargs):
-
-        orderId=self.ib.nextOrderId()
+        
+        # Avoids got multiple values for keyword argument 'orderId'
+        orderId = kwargs.pop('orderId', self.ib.nextOrderId())
         order = IBOrder(action, owner=owner, data=data,
                         size=size, price=price, pricelimit=plimit,
                         exectype=exectype, valid=valid,
@@ -459,6 +463,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         return self.submit(order)
 
     def notify(self, order, save=True):
+        self.logger.debug(f"Notify order: {order}")
         self.notifs.put(order.clone())
         order.update_time = time.time()
         if save:
@@ -678,7 +683,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
     def rebuild_iborder_from_open_order(self, msg):
         order_id = msg.orderId
         contract = msg.contract
-        order = msg.order
+        order = msg.order # type ibapi.order.Order, won't have a cerebro strategy owner
         order_status = msg.orderState.status
         client_id = order.clientId
 
