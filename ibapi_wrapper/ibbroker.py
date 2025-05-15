@@ -702,6 +702,10 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         ib_order = self.rebuild_order(order_data)
         if ib_order is None:
             return
+        
+        # todo - scott - determine where rebuild logic exists
+        if order.trailingPercent:
+            ib_order.trailpercent = order.trailingPercent / 100
 
         # set status and notify the order
         with self._lock_orders:
