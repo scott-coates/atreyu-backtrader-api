@@ -774,8 +774,13 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 openedcomm = comm - closedcomm
 
                 comminfo = order.comminfo
-                closedvalue = comminfo.getoperationcost(closed, pprice_orig)
-                openedvalue = comminfo.getoperationcost(opened, price)
+                if comminfo:
+                    closedvalue = comminfo.getoperationcost(closed, pprice_orig)
+                    openedvalue = comminfo.getoperationcost(opened, price)
+                else:
+                    closedvalue = 0.0
+                    openedvalue = 0.0
+                    self.logger.warning("External order detected, commission info not available")
 
                 # default in m_pnl is MAXFLOAT
                 pnl = cr.realizedPNL if closed else 0.0
