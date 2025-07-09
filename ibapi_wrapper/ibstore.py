@@ -838,6 +838,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         ('timerefresh', 60.0),  # How often to refresh the timeoffset
         ('indcash', True),  # Treat IND codes as CASH elements
         ('broker', None),  # broker instance
+        ('account', None),  # account to use for the broker
     )
 
     @classmethod
@@ -2092,6 +2093,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         If ``account`` is ``None``, wait for the ``managedAccounts`` message to
         set the account codes
         '''
+        account = account or self.p.account
         if account is None:
             self._event_managed_accounts.wait()
             with self._lock_managed_acc:
@@ -2189,6 +2191,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # if self.connected():
         #     self._event_accdownload.wait()
         # Lock access to acc_cash to avoid an event intefering
+        raise NotImplementedError("get_acc_values is deprecated, use get_acc_updates instead")
         if account is None:
             # wait for the managedAccount Messages
             # if self.connected():
@@ -2231,7 +2234,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # Wait for at least 1 account update download to have been finished
         # before the value can be returned to the calling client
         # Lock access to acc_cash to avoid an event intefering
-
+        account = account or self.p.account
         if account is None:
             with self._lock_managed_acc:
                 acc_count = len(self.managed_accounts)
@@ -2268,6 +2271,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # if self.connected():
         #     self._event_accdownload.wait()
         # Lock access to acc_cash to avoid an event intefering
+        account = account or self.p.account
         if account is None:
             # # wait for the managedAccount Messages
             # if self.connected():
