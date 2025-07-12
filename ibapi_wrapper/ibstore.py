@@ -2093,6 +2093,12 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         If ``account`` is ``None``, wait for the ``managedAccounts`` message to
         set the account codes
         '''
+        # multiple diff accounts e.g. margin and cash accounts
+        # error: 2101 Unable subscribe to account as the following clients are subscribed to a different account
+        # https://interactivebrokers.github.io/tws-api/classIBApi_1_1EClient.html#aea1b0d9b6b85a4e0b18caf13a51f837f
+        # https://interactivebrokers.github.io/tws-api/message_codes.html#2101 - find 2101 error
+        # Use reqPositions instead of reqAccountUpdates to avoid single-subscription limitation
+
         account = account or self.p.account
         if account is None:
             self._event_managed_accounts.wait()
@@ -2328,7 +2334,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             self.histtz = dict()  # holds sessionend (data time) for request
             self.realtz = dict()  # holds realtime bar timezone info
 
-        self.reqAccountUpdates()
+        # self.reqAccountUpdates()
         self.reqPositions()
 
         # start data request again
