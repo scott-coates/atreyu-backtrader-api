@@ -195,11 +195,7 @@ class IBOrder(OrderBase, ibapi.order.Order):
         if self.valid is None:
             tif = 'GTC'  # Good til cancelled
         elif self.valid == 0:
-            tif = 'GTD'
-            valid = datetime.datetime.combine(
-                self.data.datetime.date(), datetime.time(23, 59, 59, 9999))
-            tz_dt = tz.localize(valid)
-            self.goodTillDate = bytes(tz_dt.strftime('%Y%m%d %H:%M:%S' + ' ' + tz.zone))
+            tif = 'DAY'
         else:
             tif = 'GTD'  # Good til date
             valid = num2date(self.valid)
