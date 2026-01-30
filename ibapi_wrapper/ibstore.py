@@ -51,8 +51,9 @@ store_logger = logging.getLogger(__name__)
 
 
 class ErrorMsg(object):
-    def __init__(self, reqId, errorCode, errorString, advancedOrderRejectJson):
+    def __init__(self, reqId, errorTime, errorCode, errorString, advancedOrderRejectJson):
         self.reqId = reqId
+        self.errorTime = errorTime
         self.errorCode = errorCode
         self.errorString = errorString
         self.advancedOrderRejectJson = advancedOrderRejectJson
@@ -510,8 +511,8 @@ class IBApi(EWrapper, EClient):
         self.cb.commissionReport(commissionReport)
 
     @logibmsg
-    def error(self, reqId, errorCode, errorString, advancedOrderRejectJson = ""):
-        self.cb.error(ErrorMsg(reqId, errorCode, errorString, advancedOrderRejectJson))
+    def error(self, reqId, errorTime, errorCode, errorString, advancedOrderRejectJson=""):
+        self.cb.error(ErrorMsg(reqId, errorTime, errorCode, errorString, advancedOrderRejectJson))
 
     @logibmsg
     def position(self, account, contract, pos, avgCost):
