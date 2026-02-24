@@ -716,8 +716,11 @@ class IBStore(with_metaclass(MetaSingleton, object)):
             'max_duration_name': 'S',
         },
         '1 min': {
+            # # https://interactivebrokers.github.io/tws-api/historical_limitations.html
+            # Note: 1. At this time Historical Data Limitations for barSize = "1 mins" and greater have been lifted
             'max_duration': 1,
             'max_duration_name': 'D',
+            # 'max_duration_name': 'W',
         },
         '2 mins': {
             'max_duration': 2,
@@ -1914,6 +1917,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
                 delta = datetime.timedelta(days=size * 365)
             return delta
 
+        # todo accept duration param from call site
         if bar_size not in IBStore.BAR_SIZE:
             raise ValueError(f"Invalid bar size: {bar_size}")
         bar_size_info = IBStore.BAR_SIZE[bar_size]

@@ -1002,8 +1002,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             self.lines.bidsize[0] = float('nan')
             self.lines.asksize[0] = float('nan')
 
-        # Update the specific field
-        if rtdata.field in {TickFieldEnum.CLOSE.name, TickFieldEnum.DELAYED_CLOSE.name} :
+        if rtdata.field in {TickFieldEnum.OPEN.name, TickFieldEnum.DELAYED_OPEN.name} :
+            self.lines.open[0] = rtdata.value
+        # https://interactivebrokers.github.io/tws-api/tick_types.html
+        # Last price = Last price at which the contract traded (does not include some trades in RTVolume).
+        # Close price = The last available closing price for the previous day. For US Equities, we use corporate action processing to get the closing price, so the close price is adjusted to reflect forward and reverse splits and cash and stock dividends.
+        # [close] is used by rsi indicators but close rarely comes thru compared to last_price.
+        elif rtdata.field in {TickFieldEnum.CLOSE.name, TickFieldEnum.DELAYED_CLOSE.name, TickFieldEnum.LAST_PRICE.name, TickFieldEnum.DELAYED_LAST.name} :
             self.lines.close[0] = rtdata.value
         elif rtdata.field in {TickFieldEnum.HIGH.name, TickFieldEnum.DELAYED_HIGH.name}:
             self.lines.high[0] = rtdata.value
