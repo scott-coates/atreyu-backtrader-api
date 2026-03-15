@@ -749,10 +749,10 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
     def push_execution(self, ex):
         self.executions[ex.execId] = ex
 
-    def push_commissionreport(self, cr):
+    def push_commission_and_fees_report(self, cfr):
         with self._lock_orders:
             try:
-                ex = self.executions.pop(cr.execId)
+                ex = self.executions.pop(cfr.execId)
                 oid = ex.orderId
                 order = self.orderbyid[oid]
                 ostatus = self.ordstatus[oid].pop(ex.cumQty)
@@ -765,7 +765,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 psize, pprice, opened, closed = position.update(float(size), price)
 
                 # split commission between closed and opened
-                comm = cr.commission
+                comm = cfr.commissionAndFees
                 closedcomm = comm * float(closed) / float(size)
                 openedcomm = comm - closedcomm
 
@@ -779,7 +779,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                     self.logger.warning("External order detected, commission info not available")
 
                 # default in m_pnl is MAXFLOAT
-                pnl = cr.realizedPNL if closed else 0.0
+                pnl = cfr.realizedPNL if closed else 0.0
 
                 # The internal broker calc should yield the same result
                 # pnl = comminfo.profitandloss(-closed, pprice_orig, price)

@@ -504,11 +504,11 @@ class IBApi(EWrapper, EClient):
                                             whyHeld, mktCapPrice))
     
     @logibmsg
-    def commissionReport(self, commissionReport):
-        """The commissionReport() callback is triggered as follows:
+    def commissionAndFeesReport(self, commissionAndFeesReport):
+        """The commissionAndFeesReport() callback is triggered as follows:
         - immediately after a trade execution
         - by calling reqExecutions()."""
-        self.cb.commissionReport(commissionReport)
+        self.cb.commissionAndFeesReport(commissionAndFeesReport)
 
     @logibmsg
     def error(self, reqId, errorTime, errorCode, errorString, advancedOrderRejectJson=""):
@@ -2054,9 +2054,9 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         store_logger.info(f"Receive order status, msg.orderId: {msg.orderId}, msg.status: {msg.status}")
         self.broker.push_orderstatus(msg)
     
-    def commissionReport(self, commissionReport):
-        '''Receive the event commissionReport'''
-        self.broker.push_commissionreport(commissionReport)
+    def commissionAndFeesReport(self, commissionAndFeesReport):
+        '''Receive the event commissionAndFeesReport'''
+        self.broker.push_commission_and_fees_report(commissionAndFeesReport)
 
     def reqPositions(self):
         '''Proxy to reqPositions'''
