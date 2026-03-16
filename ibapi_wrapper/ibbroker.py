@@ -588,6 +588,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
         elif msg.status in [self.SUBMITTED, self.FILLED]:
             # These two are kept inside the order until execdetails and
             # commission are all in place - commission is the last to come
+            msg.filled = float(msg.filled)
             self.ordstatus[msg.orderId][msg.filled] = msg
 
         elif msg.status in [self.PENDINGSUBMIT, self.PRESUBMITTED, self.APIPENDING]:
@@ -595,6 +596,7 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             # programmer but the demo account sent it back at random times with
             # "filled"
             if msg.filled:
+                msg.filled = float(msg.filled)
                 self.ordstatus[msg.orderId][msg.filled] = msg
         else:  # Unknown status ...
             self.logger.warning(f"Unknown status,  orderId: {msg.orderId}, order status: {msg.status}")
@@ -787,12 +789,20 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
                 # Use the actual time provided by the execution object
                 # The report from TWS is in actual local time, not the data's tz
                 #dt = date2num(datetime.strptime(ex.time, '%Y%m%d  %H:%M:%S'))
-                dt_array = [] if ex.time == None else list(filter(bool,ex.time.split(" ")))
-                if dt_array and len(dt_array) > 1:
-                  ex_time = " ".join(dt_array)
-                  dt = date2num(datetime.datetime.strptime(ex_time, '%Y%m%d %H:%M:%S'))
-                else:
-                  dt = date2num(datetime.datetime.strptime(ex.time, '%Y%m%d %H:%M:%S %A'))
+                # dt_array = [] if ex.time == None else list(filter(bool,ex.time.split(" ")))
+                # if dt_array and len(dt_array) > 1:
+                #   ex_time = " ".join(dt_array)
+                #   dt = date2num(datetime.datetime.strptime(ex_time, '%Y%m%d %H:%M:%S'))
+                # else:
+                #   dt = date2num(datetime.datetime.strptime(ex.time, '%Y%m%d %H:%M:%S %A'))
+                parts = (ex.time or "").split()
+                if len(parts) < 2:
+                    raise ValueError(f"Unexpected execution time format: {ex.time!r}")
+
+                dt = date2num(
+                    datetime.datetime.strptime(" ".join(parts[:2]), "%Y%m%d %H:%M:%S")
+                )
+
 
                 # Need to simulate a margin, but it plays no role, because it is
                 # controlled by a real broker. Let's set the price of the item
