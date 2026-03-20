@@ -1014,8 +1014,13 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             self.lines.high[0] = rtdata.value
         elif rtdata.field in {TickFieldEnum.LOW.name, TickFieldEnum.DELAYED_LOW.name}:
             self.lines.low[0] = rtdata.value
-        elif rtdata.field in {TickFieldEnum.VOLUME.name, TickFieldEnum.DELAYED_VOLUME.name, TickFieldEnum.RT_VOLUME.name}:
+        elif rtdata.field in {TickFieldEnum.VOLUME.name, TickFieldEnum.DELAYED_VOLUME.name}:
             self.lines.volume[0] = rtdata.value
+        elif rtdata.field == TickFieldEnum.RT_VOLUME.name:
+            # RT_VOLUME format: last_price;last_size;last_time;total_volume;vwap;single_trade_flag
+            # RT_VOLUME value is '244.22;69.0000000000000000;1774017445332;154138.0000000000000000;245.50553505;false'
+            parts = str(rtdata.value).split(';')
+            self.lines.volume[0] = float(parts[3])
         elif rtdata.field in {TickFieldEnum.OPEN_INTEREST.name}:
             self.lines.openinterest[0] = rtdata.value
         elif rtdata.field in {TickFieldEnum.BID_PRICE.name, TickFieldEnum.DELAYED_BID.name}:
