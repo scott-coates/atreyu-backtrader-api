@@ -1014,7 +1014,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             self.lines.high[0] = rtdata.value
         elif rtdata.field in {TickFieldEnum.LOW.name, TickFieldEnum.DELAYED_LOW.name}:
             self.lines.low[0] = rtdata.value
-        elif rtdata.field in {TickFieldEnum.VOLUME.name, TickFieldEnum.DELAYED_VOLUME.name}:
+        elif rtdata.field in {TickFieldEnum.VOLUME.name, TickFieldEnum.DELAYED_VOLUME.name, TickFieldEnum.RT_VOLUME.name}:
             self.lines.volume[0] = rtdata.value
         elif rtdata.field in {TickFieldEnum.OPEN_INTEREST.name}:
             self.lines.openinterest[0] = rtdata.value
@@ -1027,6 +1027,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         elif rtdata.field in {TickFieldEnum.ASK_SIZE.name, TickFieldEnum.DELAYED_ASK_SIZE.name}:
             self.lines.asksize[0] = rtdata.value
         else:
+            self.logger.debug(f"Unknown tick field: {rtdata.field}, {rtdata.value}.")
             return False
 
         return True
