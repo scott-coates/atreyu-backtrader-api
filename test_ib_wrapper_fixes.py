@@ -26,7 +26,7 @@ def mock_commission_report():
     """Create mock commission report object with realistic IB API structure"""
     commission_report = Mock()
     commission_report.execId = "test_exec_123"  # Must match execution
-    commission_report.commission = 5.25
+    commission_report.commissionAndFees = 5.25
     commission_report.realizedPNL = 100.0
     return commission_report
 
@@ -74,7 +74,7 @@ def test_push_commissionreport_handles_none_comminfo_no_crash(
     
     # Act - Call the actual business method that was crashing
     # This should NOT raise an exception after the fix
-    broker.push_commissionreport(mock_commission_report)
+    broker.push_commission_and_fees_report(mock_commission_report)
     
     # Assert - Verify order.execute was called with correct commission values
     order.execute.assert_called_once()
@@ -113,7 +113,7 @@ def test_push_commissionreport_calculates_with_valid_comminfo(
     broker.ordstatus[mock_execution.orderId] = {mock_execution.cumQty: Mock()}
     
     # Act - Call the actual business method
-    broker.push_commissionreport(mock_commission_report)
+    broker.push_commission_and_fees_report(mock_commission_report)
     
     # Assert - Verify order.execute was called with calculated commission values
     order.execute.assert_called_once()
