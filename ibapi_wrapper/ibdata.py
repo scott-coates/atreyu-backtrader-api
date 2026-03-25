@@ -619,7 +619,10 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             msg = (self._storedmsg.pop(None, None) or
                     self.qlive.get(timeout=self._qcheck))
         except queue.Empty:
+            self.logger.debug(f"SCOTT DEBUG _load_live: {self._name} no msg, reconn={self._statelivereconn}")
             return None
+        # SCOTT DEBUG: what msg did we get?
+        self.logger.debug(f"SCOTT DEBUG _load_live: {self._name} got msg, reconn={self._statelivereconn}")
 
         if msg is None:  # Conn broken during historical/backfilling
             self._subcription_valid = False
@@ -716,6 +719,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             if not self._historical_get_data:
                 msg = self.qhist.get(timeout=self._qcheck)
             else:
+                self.logger.debug(f"SCOTT DEBUG _load_hist: {self._name} about to block on qhist.get() NO TIMEOUT")
                 msg = self.qhist.get()
         except queue.Empty:
             if self.p.historical:  # only historical
@@ -876,6 +880,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             return False  # nothing can be done
 
         while True:
+            # SCOTT DEBUG: what state is the feed in?
+            self.logger.debug(f"SCOTT DEBUG _load: {self._name} state={self._state} hist_get={self._historical_get_data}")
             if self._state == self._ST_LIVE:
                 result = self._load_live_data()
             elif self._state == self._ST_HISTORBACK:
