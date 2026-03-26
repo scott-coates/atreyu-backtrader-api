@@ -1247,13 +1247,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
     def connectionClosed(self):
         # Sometmes this comes without 1300/502 or any other and will not be
         # seen in error hence the need to manage the situation independently
-        if not self.close_connection():
-            # unexpected disconnect — unblock any pending q.get() callers
-            store_logger.warning("Unexpected disconnect: draining outstanding queues")
-            with self._lock_q:
-                qs = list(self.qs.values())
-            for q in reversed(qs):
-                q.put(None)
+        self.close_connection()
 
     def close_connection(self):
         if not self._stop_flag:
@@ -1372,7 +1366,7 @@ class IBStore(with_metaclass(MetaSingleton, object)):
                 msg = q.get(timeout=10)
             except queue.Empty:
                 store_logger.warning("getContractDetails timed out waiting for response")
-                break
+                raise ConnectionError("getContractDetails timed out waiting for response")
             if msg is None:
                 break
             cds.append(msg)
