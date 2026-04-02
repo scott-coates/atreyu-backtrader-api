@@ -1643,7 +1643,8 @@ class IBStore(with_metaclass(MetaSingleton, object)):
         # Short-Term Volume 5 Minutes	The past five minutes volume. Interpolation may be applied. For stocks only.	595	IBApi.EWrapper.tickSize	64
         # Short-Term Volume 10 Minutes	The past ten minutes volume. Interpolation may be applied. For stocks only.	595	IBApi.EWrapper.tickSize	65
 
-        ticks = '165,232,233,236,293,294,295,318,411,595'  # request RTVOLUME tick delivered over tickString
+        # ticks = '165,232,233,236,293,294,295,318,411,595'  # request RTVOLUME tick delivered over tickString
+        ticks = '233'  # scott: simplified - allows vix index to work
 
         if contract.secType in ['CASH', 'CFD']:
             with self._lock_q:
