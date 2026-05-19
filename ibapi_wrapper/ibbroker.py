@@ -399,7 +399,16 @@ class IBBroker(with_metaclass(MetaIBBroker, BrokerBase)):
             order.ocaGroup = self.orderbyid[order.oco['orderId']].ocaGroup
 
         self.orderbyid[order.orderId] = order
-        self.ib.placeOrder(order.orderId, order.data.tradecontract, order)
+
+        # this ibapi ibapi==10.37.02 has a bug with wording mismatch. primaryExchange does not exist in .venv/lib/python3.13/site-packages/ibapi/protobuf/Contract_pb2.py but primaryExch DOES
+        # Clearing primaryExchange can work when conId is already set because conId uniquely identifies the instrument in IB’s database. In other words, IB can resolve “contract 54968662” without needing the extra primaryExchange="PINK" hint. It doesn’t exactly “encapsulate exchange” as a field, but it points to a contract record that already knows what instrument/listing it is. If conId were missing, clearing primaryExchange would be riskier because symbols can be ambiguous
+        if order.contract.conId and order.contract.primaryExchange:
+            fixed_ib_order = order.clone()
+            fixed_ib_order.contract.primaryExchange = ""
+        else:
+            fixed_ib_order = order
+
+        self.ib.placeOrder(fixed_ib_order.orderId, fixed_ib_order.data.tradecontract, fixed_ib_order)
         self.notify(order)
 
         return order
