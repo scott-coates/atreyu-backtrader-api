@@ -733,7 +733,8 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 # self.put_notification(self.DISCONNECTED)
                 self._hist_retry_times = None
                 return None  # end of historical
-
+            else:
+                self.logger.warning(f"SCOTT DEBUG We didn't get backfill data in time, qcheck is {self._qcheck} {self._name}")
             # Live is also wished - go for it
             self._state = self._ST_LIVE
             self._check_and_reset_live_historical_data_retry()
