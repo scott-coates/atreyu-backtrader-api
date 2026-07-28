@@ -721,7 +721,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
             else:
                 self.logger.debug(f"SCOTT DEBUG _load_hist: {self._name} about to block on qhist.get() NO TIMEOUT")
                 msg = self.qhist.get()
-        except queue.Empty:
+        except queue.Empty as e:
             if self.p.historical:  # only historical
                 if self._historical_get_date_time is None:
                     self.logger.warning(f"We didn't get historical data {self._name}, consider to set the self.p.qcheck from {self._qcheck} to 0.0 to accelerate the process.")
@@ -735,6 +735,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
                 return None  # end of historical
             else:
                 self.logger.warning(f"SCOTT DEBUG We didn't get backfill data in time, qcheck is {self._qcheck} {self._name}")
+                raise e  # let the caller handle the timeout
             # Live is also wished - go for it
             self._state = self._ST_LIVE
             self._check_and_reset_live_historical_data_retry()
