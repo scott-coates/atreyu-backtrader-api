@@ -527,7 +527,7 @@ class IBData(with_metaclass(MetaIBData, DataBase)):
         elif self._usertvol and self._timeframe == bt.TimeFrame.Ticks:
             self.qlive = self.ib.reqTickByTickData(self.contract, self.p.what)
         else:
-            self.qlive = self.ib.reqRealTimeBars(self.contract, what = self.p.what, tz=self._gettz())
+            self.qlive = self.ib.reqRealTimeBars(self.contract, useRTH=self.p.useRTH, what=self.p.what, tz=self._gettz())
 
         self._subcription_valid = True
         self.logger.info(f"Start real-time data request: {self.contract.symbol}")
